@@ -32,13 +32,14 @@
     }
   },
   "bin": {
-    "claw": "./dist/cli/claw.js"
+    "cmotion": "./dist/cli/claw.js"
   },
   "scripts": {
     "build": "tsc && cp src/server/preview.html dist/server/ && esbuild dist/client/index.js --bundle --outfile=dist/bundle.js --platform=browser --format=iife",
     "build:cli": "tsc && cp src/server/preview.html dist/server/",
     "prepublishOnly": "npm run build",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "studio": "npm run --prefix studio dev"
   },
   "keywords": [],
   "author": "",

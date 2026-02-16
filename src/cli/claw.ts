@@ -2,6 +2,7 @@
 import { Command } from 'commander';
 import * as fs from 'fs';
 import * as path from 'path';
+import { spawn } from 'child_process';
 import { MotionFactory } from '../server/Factory';
 import { AudioAnalyzer } from '../server/AudioAnalyzer';
 import { ClawConfig, Clip } from '../core/Engine';
@@ -9,7 +10,7 @@ import { ClawConfig, Clip } from '../core/Engine';
 const program = new Command();
 
 program
-    .name('claw')
+    .name('cmotion')
     .description('ClawMotion CLI for programmatic video movement')
     .version('0.1.0');
 
@@ -76,7 +77,65 @@ export default {
 
         console.log(`✅ Scene created at ${sceneFile}`);
         console.log(`\nTo render:`);
-        console.log(`  claw render ${name}/scene.ts`);
+        console.log(`  cmotion render ${name}/scene.ts`);
+    });
+
+program
+    .command('studio')
+    .description('Start ClawStudio in the current directory as workspace')
+    .action(async () => {
+        const workspace = process.cwd();
+        const studioDir = path.resolve(__dirname, '../../studio');
+
+        if (!fs.existsSync(path.join(studioDir, 'package.json'))) {
+            console.error('❌ Studio package not found.');
+            process.exit(1);
+        }
+
+        console.log(`🎬 Starting ClawStudio...`);
+        console.log(`📁 Workspace: ${workspace}`);
+
+        const env = {
+            ...process.env,
+            CLAWMOTION_WORKSPACE: workspace,
+        };
+
+        const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+        const devServer = spawn(npmCmd, ['run', 'dev', '--', '--host', '0.0.0.0'], {
+            cwd: studioDir,
+            stdio: 'inherit',
+            env,
+        });
+
+        const openUrl = () => {
+            const studioUrl = 'http://localhost:5173';
+            const openCmd = process.platform === 'darwin'
+                ? 'open'
+                : process.platform === 'win32'
+                    ? 'start'
+                    : 'xdg-open';
+
+            const opener = spawn(openCmd, [studioUrl], {
+                stdio: 'ignore',
+                detached: true,
+                shell: process.platform === 'win32',
+            });
+
+            opener.once('error', () => {
+                console.log(`🌐 Open ${studioUrl} in your browser.`);
+            });
+
+            opener.once('spawn', () => {
+                console.log(`🌐 Opened ${studioUrl}`);
+                opener.unref();
+            });
+        };
+
+        setTimeout(openUrl, 2000);
+
+        devServer.on('exit', (code) => {
+            process.exit(code ?? 0);
+        });
     });
 
 program
