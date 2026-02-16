@@ -104,6 +104,22 @@ const AudioAnalysisModal: React.FC<{
     };
   }, []);
 
+  useEffect(() => {
+    if (isOpen) return;
+    if (!audioRef.current) return;
+    audioRef.current.pause();
+    audioRef.current.currentTime = 0;
+    setIsPreviewPlaying(false);
+    setPreviewTime(0);
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!audioRef.current) return;
+    audioRef.current.pause();
+    audioRef.current = null;
+    setIsPreviewPlaying(false);
+  }, [asset?.id]);
+
   if (!isOpen || !asset || !metadata) return null;
 
   const previewPulse = beats.reduce((strength, beat) => {
