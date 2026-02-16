@@ -360,7 +360,7 @@ const TimelineHelpModal: React.FC<{ isOpen: boolean; onClose: () => void; }> = (
         </div>
         <div className="space-y-3 text-sm text-slate-300">
           <p><span className="font-semibold text-slate-100">Segments</span> are planning blocks. Use them to describe the story flow (intro, build-up, outro). They do not render visuals directly.</p>
-          <p><span className="font-semibold text-slate-100">Clips</span> are the actual render items from your <code className="text-cyan-300">*.claw</code> files. Each clip has a start and duration, and can overlap with other clips in different lanes.</p>
+          <p><span className="font-semibold text-slate-100">Clips</span> are the actual render items from your <code className="text-cyan-300">*.claw</code> files. Each clip has a start and duration, and same-lane overlap is blocked while dragging/resizing.</p>
           <p><span className="font-semibold text-slate-100">Playhead</span> is the vertical white line. Drag it anywhere to scrub and preview that exact moment.</p>
           <p><span className="font-semibold text-slate-100">Handles</span> on the left and right side of segment/clip blocks resize timing. Drag the middle of a block to move it.</p>
           <p><span className="font-semibold text-slate-100">Zoom</span> controls change timeline scale so you can edit either broad structure or frame-level details.</p>
@@ -642,9 +642,7 @@ const App: React.FC = () => {
     return aStart < bEnd - 0.0001 && bStart < aEnd - 0.0001;
   };
 
-
   const clipLaneById = new Map(timelineClips.map((clip) => [clip.id, clip.lane]));
-
 
   useEffect(() => {
     const onDragMove = (e: MouseEvent) => {
