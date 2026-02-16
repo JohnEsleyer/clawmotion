@@ -1,10 +1,11 @@
-import { ClawEngine } from '../core/Engine';
+import { ClawEngine, Clip } from '../core/Engine';
 import { PostProcessor } from './PostProcessor';
+import { Compositor, LayerData } from './Compositor';
 
 export class ClawPlayer {
     private container: HTMLElement;
-    private canvas2d: HTMLCanvasElement; // Hidden rendering canvas
-    private ctx2d: CanvasRenderingContext2D;
+    private layerCanvases: Map<string, HTMLCanvasElement> = new Map();
+    private compositor: Compositor;
     private postProcessor: PostProcessor;
     private engine: ClawEngine;
 
@@ -24,13 +25,8 @@ export class ClawPlayer {
 
         this.engine = engine;
 
-        // 1. Setup 2D Rendering Canvas (Hidden)
-        this.canvas2d = document.createElement('canvas');
-        this.canvas2d.width = engine.config.width;
-        this.canvas2d.height = engine.config.height;
-        const context = this.canvas2d.getContext('2d');
-        if (!context) throw new Error('Could not get 2D context');
-        this.ctx2d = context;
+        // 1. Setup Compositor (WebGL)
+        this.compositor = new Compositor(engine.config.width, engine.config.height);
 
         // 2. Setup PostProcessor and add its canvas to the DOM
         this.postProcessor = new PostProcessor(engine.config.width, engine.config.height);
@@ -38,6 +34,16 @@ export class ClawPlayer {
 
         // Initial render
         this.render();
+    }
+
+    private getOrLayerCanvas(id: string): HTMLCanvasElement {
+        if (!this.layerCanvases.has(id)) {
+            const canvas = document.createElement('canvas');
+            canvas.width = this.engine.config.width;
+            canvas.height = this.engine.config.height;
+            this.layerCanvases.set(id, canvas);
+        }
+        return this.layerCanvases.get(id)!;
     }
 
     public play() {
@@ -85,11 +91,25 @@ export class ClawPlayer {
     };
 
     private render() {
-        this.engine.render(this.currentTick, this.ctx2d);
+        // 1. Render all active clips into their own canvases
+        const layerData = this.engine.renderToLayers(this.currentTick, (clip: Clip) => {
+            const canvas = this.getOrLayerCanvas(clip.id);
+            return canvas.getContext('2d');
+        });
 
-        // Apply Post-Processing
+        // 2. Composite layers using WebGL
+        const compositeLayers: LayerData[] = layerData.map(l => ({
+            source: this.layerCanvases.get(l!.clip.id)!,
+            opacity: l!.opacity,
+            blendMode: l!.clip.blendMode || 'normal',
+            transform: l!.transform
+        }));
+
+        this.compositor.composite(compositeLayers);
+
+        // 3. Apply Post-Processing to the composited result
         const effects = (this.engine.config as any).effects || {};
-        this.postProcessor.render(this.canvas2d, effects);
+        this.postProcessor.render(this.compositor.getCanvas(), effects);
 
         // Sync Audio if available
         const audioAsset = this.engine.assets.get('main-audio') as HTMLAudioElement;

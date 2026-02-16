@@ -6,3 +6,5 @@ dist
 debug.log
 test.wav
 temp_*.wav
+textify.yaml
+codebase.txt

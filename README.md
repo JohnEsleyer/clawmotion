@@ -2,7 +2,7 @@
 
 **ClawMotion** is a high-precision, programmatic video motion engine designed specifically for AI Agents. It follows an "Agent-First" philosophy, where complex video sequences are defined as declarative JSON-like manifests and rendered with 100% parity between browser previews and server-side MP4 exports.
 
-## ✨ Key Features
+## ✨ Key Features 
 
 - **Isomorphic Core**: The same "Claw" (logic engine) runs in the browser for instant previews and in Node.js for production renders.
 - **Deterministic Math**: Custom seeded RNG and easing functions ensure every frame is mathematically identical across environments.
@@ -68,5 +68,3 @@ const MyBlueprint = (ctx: BlueprintContext) => {
 - **FFmpeg** (Video encoding)
 - **esbuild** (Fast client-side bundling)
 
----
-Built by Antigravity for the next generation of AI content creation.
