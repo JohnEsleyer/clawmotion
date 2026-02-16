@@ -17,7 +17,7 @@ if (typeof window !== 'undefined') {
 import 'prismjs/components/prism-typescript';
 
 import { StudioEngine, analyzeAudioFile, detectBeats, generateAudioSummary } from './services/engine';
-import { generateClawCode } from './services/geminiService';
+import { generateClawCode, PUTER_MODELS } from './services/geminiService';
 import { ChatMessage, Asset, FileEntry, AudioMetadata, AudioAnalysisSettings, AudioSection } from './types';
 import { FULL_COMPREHENSIVE_GUIDE } from './constants';
 
@@ -401,8 +401,14 @@ const App: React.FC = () => {
   const [showAnalysisModal, setShowAnalysisModal] = useState(false);
   const [showPasteModal, setShowPasteModal] = useState(false);
   const [analyzingAsset, setAnalyzingAsset] = useState<Asset | null>(null);
-  const [messages, setMessages] = useState<ChatMessage[]>([{ role: 'assistant', content: "Welcome to ClawStudio. How can I help you build your motion masterpiece?", timestamp: Date.now() }]);
+  const [messages, setMessages] = useState<ChatMessage[]>([{ role: 'assistant', content: "Welcome to ClawStudio. I'm powered by Puter.js Qwen models. Tell me what to build.", timestamp: Date.now() }]);
   const [chatInput, setChatInput] = useState("");
+  const [selectedModel, setSelectedModel] = useState<(typeof PUTER_MODELS)[number]>(PUTER_MODELS[0]);
+  const [workspacePath, setWorkspacePath] = useState("");
+  const [timelineScale, setTimelineScale] = useState(1);
+  const timelineRef = useRef<HTMLDivElement>(null);
+  const [isTimelinePanning, setIsTimelinePanning] = useState(false);
+  const [panOrigin, setPanOrigin] = useState(0);
   const [isGenerating, setIsGenerating] = useState(false);
   const [importProgress, setImportProgress] = useState({ active: false, percent: 0, current: '', total: 0, count: 0 });
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
@@ -473,6 +479,43 @@ const App: React.FC = () => {
     return () => clearInterval(interval);
   }, [isPlaying]);
 
+  const timelineTotalWidth = Math.max(1000, Math.round(1000 * timelineScale));
+
+  const handleTimelineWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+    if (!timelineRef.current) return;
+    e.preventDefault();
+    const rect = timelineRef.current.getBoundingClientRect();
+    const pointerX = e.clientX - rect.left + timelineRef.current.scrollLeft;
+    const nextScale = Math.min(8, Math.max(0.5, timelineScale + (e.deltaY < 0 ? 0.1 : -0.1)));
+    const ratio = pointerX / timelineTotalWidth;
+    setTimelineScale(nextScale);
+    requestAnimationFrame(() => {
+      if (!timelineRef.current) return;
+      const nextWidth = Math.max(1000, Math.round(1000 * nextScale));
+      timelineRef.current.scrollLeft = Math.max(0, nextWidth * ratio - (e.clientX - rect.left));
+    });
+  };
+
+  const handleTimelineMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!timelineRef.current || e.button !== 0) return;
+    setIsTimelinePanning(true);
+    setPanOrigin(e.clientX + timelineRef.current.scrollLeft);
+  };
+
+  const handleTimelineMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isTimelinePanning || !timelineRef.current) return;
+    timelineRef.current.scrollLeft = panOrigin - e.clientX;
+  };
+
+  const stopTimelinePan = () => setIsTimelinePanning(false);
+
+  useEffect(() => {
+    fetch('/api/workspace')
+      .then((r) => r.json())
+      .then((data) => setWorkspacePath(data.workspace || ''))
+      .catch(() => setWorkspacePath(''));
+  }, []);
+
   const handleSendMessage = async () => {
     if (!chatInput.trim() || isGenerating) return;
     setMessages(prev => [...prev, { role: 'user', content: chatInput, timestamp: Date.now() }]);
@@ -481,9 +524,8 @@ const App: React.FC = () => {
     setIsGenerating(true);
 
     try {
-      const result = await generateClawCode(currentPrompt, files, assets);
-      // Logic to parse result and update files (similar to prototype)
-      setMessages(prev => [...prev, { role: 'assistant', content: "I've updated the project based on your request.", timestamp: Date.now() }]);
+      const result = await generateClawCode(currentPrompt, files, assets, selectedModel);
+      setMessages(prev => [...prev, { role: 'assistant', content: result, timestamp: Date.now() }]);
     } catch (e) {
       setMessages(prev => [...prev, { role: 'assistant', content: "Failed to process request.", timestamp: Date.now() }]);
     } finally {
@@ -494,7 +536,17 @@ const App: React.FC = () => {
   const handleImportAssets = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = e.target.files;
     if (!selectedFiles || selectedFiles.length === 0) return;
-    
+
+    if (workspacePath) {
+      const formData = new FormData();
+      Array.from(selectedFiles).forEach((file) => formData.append('files', file));
+      try {
+        await fetch('/api/assets/import', { method: 'POST', body: formData });
+      } catch (error) {
+        console.warn('Failed to persist assets in workspace:', error);
+      }
+    }
+
     const newAssets: Asset[] = [];
     
     for (let i = 0; i < selectedFiles.length; i++) {
@@ -546,6 +598,7 @@ const App: React.FC = () => {
           <button onClick={() => setShowAssetModal(true)} className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-md text-sm font-bold text-slate-300 transition-all">
             <FolderOpen className="w-4 h-4 inline mr-2" /> Assets
           </button>
+          {workspacePath && <span className="px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-md text-xs text-slate-300 max-w-[360px] truncate" title={workspacePath}>Workspace: {workspacePath}</span>}
           <button className="px-4 py-1.5 bg-red-600 hover:bg-red-500 rounded-md text-sm font-bold text-white shadow-lg transition-all"><Download className="w-4 h-4 inline mr-2" /> Export</button>
         </div>
       </header>
@@ -618,11 +671,14 @@ const App: React.FC = () => {
                 <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
                   {messages.map((m, i) => (
                     <div key={i} className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'}`}>
-                      <div className={`p-3 rounded-2xl text-[12px] max-w-[80%] ${m.role === 'user' ? 'bg-red-600' : 'bg-slate-800/50 border border-slate-700'}`}>{m.content}</div>
+                      <div className={`p-3 rounded-2xl text-[12px] max-w-[80%] whitespace-pre-wrap ${m.role === 'user' ? 'bg-red-600' : 'bg-slate-800/50 border border-slate-700'}`}>{m.content}</div>
                     </div>
                   ))}
                 </div>
                 <div className="p-4 border-t border-slate-800">
+                  <select value={selectedModel} onChange={(e) => setSelectedModel(e.target.value as (typeof PUTER_MODELS)[number])} className="w-full mb-2 bg-slate-900 border border-slate-700 rounded-xl p-2 text-xs">
+                    {PUTER_MODELS.map((model) => <option key={model} value={model}>{model}</option>)}
+                  </select>
                   <textarea
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs focus:ring-1 focus:ring-red-500 outline-none h-24 resize-none"
                     placeholder="Describe changes..."
@@ -654,14 +710,27 @@ const App: React.FC = () => {
         <div className="h-10 bg-slate-900/50 flex items-center px-4 gap-4 border-b border-slate-800">
           <button onClick={togglePlay} className="text-red-400 hover:text-red-300">{isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}</button>
           <span className="font-mono text-xs text-red-300">{currentTime.toFixed(2)}s / {duration.toFixed(2)}s</span>
+          <div className="flex items-center gap-2 text-xs text-slate-400">
+            <button onClick={() => setTimelineScale(z => Math.max(0.5, z - 0.2))}><ZoomOut className="w-4 h-4" /></button>
+            <span className="font-mono">{Math.round(timelineScale * 100)}%</span>
+            <button onClick={() => setTimelineScale(z => Math.min(8, z + 0.2))}><ZoomIn className="w-4 h-4" /></button>
+            <span className="text-[10px]">Drag timeline to pan</span>
+          </div>
           <div className="flex-1" />
           <button onClick={() => setShowAssetModal(true)} className="text-xs text-slate-400 hover:text-white flex items-center gap-1">
             <FolderOpen className="w-3 h-3" /> Assets ({assets.length})
           </button>
         </div>
-        <div className="flex-1 relative bg-black/40 overflow-hidden">
+        <div className="flex-1 relative bg-black/40 overflow-hidden flex">
+          <div className="w-52 border-r border-slate-800 bg-slate-900/30 p-2 overflow-y-auto">
+            <div className="text-[10px] font-black uppercase text-slate-500 mb-2">Media Panel</div>
+            {assets.length === 0 ? <div className="text-xs text-slate-600">No assets.</div> : assets.map(asset => (
+              <div key={asset.id} className="text-xs text-slate-300 border border-slate-800 rounded px-2 py-1 mb-1 truncate">{asset.name}</div>
+            ))}
+          </div>
+          <div ref={timelineRef} onWheel={handleTimelineWheel} onMouseDown={handleTimelineMouseDown} onMouseMove={handleTimelineMouseMove} onMouseUp={stopTimelinePan} onMouseLeave={stopTimelinePan} className={`flex-1 relative overflow-x-auto overflow-y-hidden ${isTimelinePanning ? 'cursor-grabbing' : 'cursor-grab'}`}>
           {studioEngineRef.current && (
-            <div className="absolute inset-0 p-2">
+            <div className="p-2 h-full" style={{ width: timelineTotalWidth }}>
               <div className="h-full flex flex-col gap-1">
                 <div className="text-[10px] font-black uppercase text-slate-500 px-2 mb-1">Visuals</div>
                 <div className="flex-1 bg-slate-900/30 rounded border border-slate-800 relative overflow-hidden">
@@ -701,6 +770,7 @@ const App: React.FC = () => {
               </div>
             </div>
           )}
+          </div>
           <div 
             className="absolute top-0 bottom-0 w-px bg-white z-50 playhead" 
             style={{ left: `${(currentTime / duration) * 100}%` }} 

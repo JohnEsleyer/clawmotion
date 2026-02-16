@@ -9,7 +9,7 @@
 
 ## ✨ Key Features
 
-- **🚀 Unified Claw CLI**: Initialize projects, preview in real-time, and render to MP4 with a single tool.
+- **🚀 Unified cmotion CLI**: Initialize projects, preview in real-time, and render to MP4 with a single tool.
 - **🏗️ Isomorphic Core**: The same "Claw" logic runs in the browser for instant previews and in Node.js for production renders.
 - **🧠 AI-Optimized**: Built for LLMs to generate manifests seamlessly. See [LLM.md](./LLM.md) for AI context.
 - **🎲 Deterministic Math**: Seeded RNG and easing ensure every frame is mathematically identical across environments.
@@ -33,19 +33,25 @@ npm link
 
 ### 2. Scaffold a Scene
 ```bash
-claw init my-cinematic-intro
+cmotion init my-cinematic-intro
 ```
 
 ### 3. Preview (Real-time)
 Watch your scene come to life in the browser with full hot-reloading support:
 ```bash
-claw preview my-cinematic-intro/scene.ts
+cmotion preview my-cinematic-intro/scene.ts
 ```
 
 ### 4. Render (Production)
 Export to high-quality MP4 using parallel GPU/CPU workers:
 ```bash
-claw render my-cinematic-intro/scene.ts --output intro.mp4 --parallel 4
+cmotion render my-cinematic-intro/scene.ts --output intro.mp4 --parallel 4
+```
+
+### 5. Open Studio in Current Workspace
+Run ClawStudio from any folder and that folder becomes the workspace (imports are copied into `<workspace>/assets`):
+```bash
+cmotion studio
 ```
 
 ---

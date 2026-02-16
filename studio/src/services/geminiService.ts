@@ -1,12 +1,39 @@
 import { SYSTEM_PROMPT } from '../constants';
 import type { FileEntry, Asset } from '../types';
 
+declare global {
+    interface Window {
+        puter?: {
+            ai: {
+                chat: (prompt: string, options: { model: string; stream?: boolean }) => Promise<any>;
+            };
+        };
+    }
+}
+
+export const PUTER_MODELS = [
+    'qwen/qwen3-next-80b-a3b-instruct',
+    'qwen/qwen3-coder-next',
+    'qwen/qwen3-max-thinking',
+    'qwen/qwen3-vl-8b-instruct',
+    'qwen/qwen3-coder',
+    'qwen/qwen3-coder-plus',
+    'qwen/qwen-plus-2025-07-28',
+    'qwen/qwen3-30b-a3b-instruct-2507'
+] as const;
+
+export type PuterModel = (typeof PUTER_MODELS)[number];
+
 export async function generateClawCode(
     prompt: string,
     files: FileEntry[],
     assets: Asset[],
-    model: string = 'default'
+    model: PuterModel = 'qwen/qwen3-next-80b-a3b-instruct'
 ): Promise<string> {
+    if (!window.puter?.ai?.chat) {
+        throw new Error('Puter.js is not available. Reload the page and sign in to Puter if prompted.');
+    }
+
     const assetDescriptions = assets.map(a => {
         let desc = `- ${a.name} (${a.type})`;
         if (a.metadata) {
@@ -23,26 +50,19 @@ Available Assets:
 ${assetDescriptions || 'No assets uploaded'}
 
 Current Orchestrator Code:
-${files.find(f => f.type === 'orchestrator')?.code || ""}
+${files.find(f => f.type === 'orchestrator')?.code || ''}
 `;
 
-    console.log('AI Prompt:', `${SYSTEM_PROMPT}\n\nContext:\n${context}\n\nUser Request: ${prompt}`);
+    const response = await window.puter.ai.chat(
+        `${SYSTEM_PROMPT}\n\nContext:\n${context}\n\nUser Request: ${prompt}`,
+        { model }
+    );
 
-    return `// AI generation requires backend service
-// For now, manually edit the code in the Editor tab
-
-// To add a clip, use:
-/*
-claw.addClip({
-  id: 'my-clip',
-  blueprintId: 'background.claw',
-  startTick: 0,
-  durationTicks: 150,  // 5 seconds at 30fps
-  layer: 0
-});
-*/`;
+    if (typeof response === 'string') return response;
+    if (response?.text) return response.text;
+    return JSON.stringify(response, null, 2);
 }
 
 export function isAIAvailable(): boolean {
-    return false;
+    return Boolean(window.puter?.ai?.chat);
 }
