@@ -19,32 +19,32 @@ export class MotionFactory {
     /**
      * Bundle client code and start a local server.
      */
-    private async startServer() {
-        // 1. Bundle Client Code if not already bundled or if we are in dev mode
+    public async serve(clientEntry?: string) {
+        // 1. Bundle Client Code
         const bundlePath = path.join(__dirname, '../../dist/bundle.js');
         const clientEntryTs = path.join(__dirname, '../client/index.ts');
         const clientEntryJs = path.join(__dirname, '../client/index.js');
 
-        if (!fs.existsSync(bundlePath)) {
-            console.log('[Factory] Bundling client code with esbuild...');
-            try {
-                const entryPoint = fs.existsSync(clientEntryTs) ? clientEntryTs : clientEntryJs;
-                if (!fs.existsSync(entryPoint)) {
-                    throw new Error(`Client entry point not found at ${clientEntryTs} or ${clientEntryJs}`);
-                }
+        const entryPoint = clientEntry || (fs.existsSync(clientEntryTs) ? clientEntryTs : clientEntryJs);
 
-                await esbuild.build({
-                    entryPoints: [entryPoint],
-                    bundle: true,
-                    outfile: bundlePath,
-                    platform: 'browser',
-                    format: 'iife'
-                });
-                console.log('[Factory] Bundling complete.');
-            } catch (e) {
-                console.error('[Factory] Bundling failed:', e);
-                throw e;
+        console.log(`[Factory] Bundling client code from ${entryPoint}...`);
+        try {
+            if (!fs.existsSync(entryPoint)) {
+                throw new Error(`Client entry point not found at ${entryPoint}`);
             }
+
+            await esbuild.build({
+                entryPoints: [entryPoint],
+                bundle: true,
+                outfile: bundlePath,
+                platform: 'browser',
+                format: 'iife',
+                logLevel: 'error'
+            });
+            console.log('[Factory] Bundling complete.');
+        } catch (e) {
+            console.error('[Factory] Bundling failed:', e);
+            throw e;
         }
 
         // 2. Start Express
@@ -59,7 +59,6 @@ export class MotionFactory {
             if (fs.existsSync(htmlPath)) {
                 res.sendFile(htmlPath);
             } else {
-                // Fallback if file not found (e.g., specific build structure)
                 res.send('<html><body><h1>Error: preview.html not found</h1></body></html>');
             }
         });
@@ -78,8 +77,8 @@ export class MotionFactory {
     /**
      * Render the video to a file, supporting parallel chunks.
      */
-    public async render(config: ClawConfig, clips: Clip[], outputPath: string, audioData?: any, images?: Record<string, string>, onTick?: (tick: number) => void) {
-        await this.startServer();
+    public async render(config: ClawConfig, clips: Clip[], outputPath: string, audioData?: any, images?: Record<string, string>, clientEntry?: string, onTick?: (tick: number) => void) {
+        await this.serve(clientEntry);
 
         const concurrency = config.concurrency || 1;
         const totalTicks = config.duration * config.fps;

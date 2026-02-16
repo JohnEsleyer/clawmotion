@@ -24,28 +24,40 @@
 
 ```bash
 npm install
+npm run build:cli
+# Link the CLI globally (optional)
+npm link 
 ```
 
-### Run Examples
+### CLI usage
 
-**1. Basic Hello World**
+The **Claw CLI** is the unified tool for managing projects and rendering.
+
+**1. Initialize a new scene**
 ```bash
-npx ts-node examples/hello-world.ts
+claw init my-scene
 ```
 
-**2. Audio-Reactive Visualizer**
+**2. Preview in Browser**
 ```bash
-npx ts-node examples/audio-viz.ts
+claw preview my-scene/scene.ts
 ```
 
-**3. Professional Cinematic Showcase**
+**3. Render to MP4**
 ```bash
-npx ts-node examples/full-showcase.ts
+claw render my-scene/scene.ts --output video.mp4
 ```
 
-**4. Transition System Demo**
+**4. Run Legacy Examples**
 ```bash
-npx ts-node examples/transitions.ts
+claw render examples/hello-world.ts
+claw render examples/audio-viz.ts
+claw render examples/full-showcase.ts
+```
+
+**5. List Built-in Blueprints**
+```bash
+claw list
 ```
 
 ## 🎨 Creative Blueprinting

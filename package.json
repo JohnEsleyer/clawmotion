@@ -1,6 +1,6 @@
 {
   "name": "@johnesleyer/clawmotion",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Programmatic video motion engine for AI Agents",
   "publishConfig": {
     "access": "public"
@@ -24,8 +24,12 @@
       "types": "./dist/server/index.d.ts"
     }
   },
+  "bin": {
+    "claw": "./dist/cli/claw.js"
+  },
   "scripts": {
     "build": "tsc && cp src/server/preview.html dist/server/ && esbuild dist/client/index.js --bundle --outfile=dist/bundle.js --platform=browser --format=iife",
+    "build:cli": "tsc && cp src/server/preview.html dist/server/",
     "prepublishOnly": "npm run build",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -41,6 +45,7 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "commander": "^14.0.3",
     "esbuild": "^0.27.3",
     "express": "^5.2.1",
     "fft-js": "^0.0.12",
