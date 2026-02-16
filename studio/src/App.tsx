@@ -196,29 +196,6 @@ const AudioAnalysisModal: React.FC<{
     return () => window.clearInterval(interval);
   }, [asset]);
 
-  const previewPulse = beats.reduce((strength, beat) => {
-    const distance = Math.abs(beat - previewTime);
-    if (distance > 0.2) return strength;
-    return Math.max(strength, 1 - distance / 0.2);
-  }, 0);
-
-  const addSection = () => {
-    const start = sections.length === 0 ? 0 : sections[sections.length - 1].end;
-    const end = Math.min(asset.metadata!.duration, start + 2.5);
-    const color = SEGMENT_COLORS[sections.length % SEGMENT_COLORS.length];
-    setSections((prev) => ([...prev, { id: `sec-${Date.now()}`, label: `Section ${prev.length + 1}`, description: '', start, end, color }]));
-  };
-
-  const updateSection = (id: string, patch: Partial<AudioSection>) => {
-    setSections((prev) => prev.map((section) => section.id === id ? { ...section, ...patch } : section));
-  };
-
-  const removeSection = (id: string) => {
-    setSections((prev) => prev.filter((section) => section.id !== id));
-  };
-
-  const timelineDuration = Math.max(1, asset.metadata.duration);
-
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90 p-8">
       <div className="bg-[#0f0f1a] border border-slate-700 w-full max-w-6xl rounded-2xl p-6 space-y-4 max-h-[92vh] overflow-y-auto custom-scrollbar">
