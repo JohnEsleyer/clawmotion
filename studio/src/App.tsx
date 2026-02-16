@@ -65,23 +65,126 @@ const AudioAnalysisModal: React.FC<{
   asset: Asset | null;
   onSave: (id: string, metadata: AudioMetadata) => void;
 }> = ({ isOpen, onClose, asset, onSave }) => {
-  if (!isOpen || !asset || !asset.metadata) return null;
-
-  const [settings, setSettings] = useState<AudioAnalysisSettings>(asset.metadata.settings);
-  const [beats, setBeats] = useState<number[]>(asset.metadata.beats);
-  const [sections, setSections] = useState<AudioSection[]>(asset.metadata.sections || []);
+  const metadata = asset?.metadata;
+  const [settings, setSettings] = useState<AudioAnalysisSettings>({ threshold: 1.3, minInterval: 0.25, offset: 0 });
+  const [beats, setBeats] = useState<number[]>([]);
+  const [sections, setSections] = useState<AudioSection[]>([]);
   const [previewTime, setPreviewTime] = useState(0);
+  const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
-    setSettings(asset.metadata!.settings);
-    setSections(asset.metadata!.sections || []);
-  }, [asset]);
+    if (!metadata) return;
+    setSettings(metadata.settings);
+    setBeats(metadata.beats || []);
+    setSections(metadata.sections || []);
+    setPreviewTime(0);
+  }, [metadata]);
 
   useEffect(() => {
-    if (asset.metadata?.energies) {
-      setBeats(detectBeats(asset.metadata.energies, settings));
+    if (metadata?.energies) {
+      setBeats(detectBeats(metadata.energies, settings));
     }
-  }, [asset, settings]);
+  }, [metadata, settings]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      if (audioRef.current && isPreviewPlaying) {
+        setPreviewTime(audioRef.current.currentTime || 0);
+      }
+    }, 50);
+    return () => window.clearInterval(interval);
+  }, [isPreviewPlaying]);
+
+  useEffect(() => {
+    return () => {
+      if (!audioRef.current) return;
+      audioRef.current.pause();
+      audioRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (isOpen) return;
+    if (!audioRef.current) return;
+    audioRef.current.pause();
+    audioRef.current.currentTime = 0;
+    setIsPreviewPlaying(false);
+    setPreviewTime(0);
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!audioRef.current) return;
+    audioRef.current.pause();
+    audioRef.current = null;
+    setIsPreviewPlaying(false);
+  }, [asset?.id]);
+
+  if (!isOpen || !asset || !metadata) return null;
+
+  const previewPulse = beats.reduce((strength, beat) => {
+    const distance = Math.abs(beat - previewTime);
+    if (distance > 0.2) return strength;
+    return Math.max(strength, 1 - distance / 0.2);
+  }, 0);
+
+  const addSection = () => {
+    const start = sections.length === 0 ? 0 : sections[sections.length - 1].end;
+    const end = Math.min(metadata.duration, start + 2.5);
+    const color = SEGMENT_COLORS[sections.length % SEGMENT_COLORS.length];
+    setSections((prev) => ([...prev, { id: `sec-${Date.now()}`, label: `Section ${prev.length + 1}`, description: '', start, end, color }]));
+  };
+
+  const updateSection = (id: string, patch: Partial<AudioSection>) => {
+    setSections((prev) => prev.map((section) => section.id === id ? { ...section, ...patch } : section));
+  };
+
+  const removeSection = (id: string) => {
+    setSections((prev) => prev.filter((section) => section.id !== id));
+  };
+
+  const timelineDuration = Math.max(1, metadata.duration);
+
+  const handleTogglePreview = async () => {
+    if (!audioRef.current) {
+      const audio = new Audio(asset.url);
+      audio.preload = 'auto';
+      audio.currentTime = previewTime;
+      audioRef.current = audio;
+      audio.addEventListener('ended', () => {
+        setIsPreviewPlaying(false);
+      });
+    }
+
+    if (isPreviewPlaying) {
+      audioRef.current.pause();
+      setIsPreviewPlaying(false);
+      return;
+    }
+
+    try {
+      await audioRef.current.play();
+      setIsPreviewPlaying(true);
+    } catch {
+      setIsPreviewPlaying(false);
+    }
+  };
+
+  const handleSeekPreview = (time: number) => {
+    const clamped = Math.max(0, Math.min(metadata.duration, time));
+    setPreviewTime(clamped);
+    if (audioRef.current) {
+      audioRef.current.currentTime = clamped;
+    }
+  };
+
+  const stopPreview = () => {
+    if (!audioRef.current) return;
+    audioRef.current.pause();
+    audioRef.current.currentTime = 0;
+    setIsPreviewPlaying(false);
+    setPreviewTime(0);
+  };
 
   useEffect(() => {
     const interval = window.setInterval(() => {
@@ -118,8 +221,16 @@ const AudioAnalysisModal: React.FC<{
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90 p-8">
-      <div className="bg-[#0f0f1a] border border-slate-700 w-full max-w-6xl rounded-2xl p-6 space-y-4 max-h-[92vh] overflow-hidden flex flex-col">
-        <h2 className="text-lg font-bold">Audio Analysis: {asset.name}</h2>
+      <div className="bg-[#0f0f1a] border border-slate-700 w-full max-w-6xl rounded-2xl p-6 space-y-4 max-h-[92vh] overflow-y-auto custom-scrollbar">
+        <div className="flex items-center justify-between gap-3 sticky top-0 bg-[#0f0f1a] py-1 z-10">
+          <h2 className="text-lg font-bold">Audio Analysis: {asset.name}</h2>
+          <div className="flex items-center gap-2">
+            <button onClick={handleTogglePreview} className="px-3 py-1.5 text-xs rounded bg-cyan-700 flex items-center gap-1">
+              {isPreviewPlaying ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
+              {isPreviewPlaying ? 'Pause Preview' : 'Play Preview'}
+            </button>
+          </div>
+        </div>
 
         <div className="grid grid-cols-3 gap-3">
           <label className="text-xs">Threshold
@@ -149,7 +260,14 @@ const AudioAnalysisModal: React.FC<{
                 backgroundColor: section.color
               }} />
             ))}
-            <div className="absolute top-0 bottom-0 w-[3px] bg-white" style={{ left: `${(previewTime / timelineDuration) * 100}%` }} />
+            <button
+              className="absolute top-0 bottom-0 w-[3px] bg-white cursor-ew-resize"
+              style={{ left: `${(previewTime / timelineDuration) * 100}%` }}
+              onMouseDown={(e) => {
+                const rect = (e.currentTarget.parentElement as HTMLDivElement).getBoundingClientRect();
+                handleSeekPreview(((e.clientX - rect.left) / rect.width) * timelineDuration);
+              }}
+            />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -171,12 +289,12 @@ const AudioAnalysisModal: React.FC<{
           </div>
         </div>
 
-        <div className="flex-1 min-h-0 rounded border border-slate-700 bg-slate-950/40 p-3 flex flex-col">
+        <div className="rounded border border-slate-700 bg-slate-950/40 p-3">
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-sm font-semibold">Segments</h3>
             <button onClick={addSection} className="text-[11px] px-2 py-1 rounded bg-cyan-700">Add Segment</button>
           </div>
-          <div className="space-y-2 overflow-y-auto custom-scrollbar">
+          <div className="space-y-2 max-h-[34vh] overflow-y-auto custom-scrollbar">
             {sections.length === 0 && <div className="text-xs text-slate-500">No segments yet. Add descriptive sections to help the LLM understand musical structure.</div>}
             {sections.map((section) => (
               <div key={section.id} className="rounded border border-slate-800 p-2 bg-slate-900/40">
@@ -184,7 +302,7 @@ const AudioAnalysisModal: React.FC<{
                   <input value={section.label} onChange={(e) => updateSection(section.id, { label: e.target.value })} className="col-span-3 bg-slate-950 border border-slate-700 rounded p-2 text-xs" placeholder="Title" />
                   <input value={section.description || ''} onChange={(e) => updateSection(section.id, { description: e.target.value })} className="col-span-5 bg-slate-950 border border-slate-700 rounded p-2 text-xs" placeholder="Description" />
                   <input type="number" step="0.1" value={section.start} onChange={(e) => updateSection(section.id, { start: Math.max(0, Number(e.target.value)) })} className="col-span-1 bg-slate-950 border border-slate-700 rounded p-2 text-xs" />
-                  <input type="number" step="0.1" value={section.end} onChange={(e) => updateSection(section.id, { end: Math.min(asset.metadata!.duration, Number(e.target.value)) })} className="col-span-1 bg-slate-950 border border-slate-700 rounded p-2 text-xs" />
+                  <input type="number" step="0.1" value={section.end} onChange={(e) => updateSection(section.id, { end: Math.min(metadata.duration, Number(e.target.value)) })} className="col-span-1 bg-slate-950 border border-slate-700 rounded p-2 text-xs" />
                   <input type="color" value={section.color} onChange={(e) => updateSection(section.id, { color: e.target.value })} className="col-span-1 h-8 w-full bg-transparent" />
                   <button onClick={() => removeSection(section.id)} className="col-span-1 text-red-400 text-xs"><Trash2 className="w-4 h-4 mx-auto" /></button>
                 </div>
@@ -194,19 +312,20 @@ const AudioAnalysisModal: React.FC<{
         </div>
 
         <div className="flex justify-end gap-3">
-          <button onClick={onClose} className="px-4 py-2 text-xs">Cancel</button>
+          <button onClick={() => { stopPreview(); onClose(); }} className="px-4 py-2 text-xs">Cancel</button>
           <button onClick={() => {
             const normalizedSections = sections
               .filter((section) => section.end > section.start)
               .sort((a, b) => a.start - b.start);
-            const metadata: AudioMetadata = {
-              ...asset.metadata!,
+            const nextMetadata: AudioMetadata = {
+              ...metadata,
               beats,
               sections: normalizedSections,
               settings,
-              summary: generateAudioSummary(asset.metadata!.duration, beats, normalizedSections)
+              summary: generateAudioSummary(metadata.duration, beats, normalizedSections)
             };
-            onSave(asset.id, metadata);
+            onSave(asset.id, nextMetadata);
+            stopPreview();
             onClose();
           }} className="px-4 py-2 text-xs rounded bg-emerald-600">Save</button>
         </div>
@@ -283,7 +402,7 @@ const TimelineHelpModal: React.FC<{ isOpen: boolean; onClose: () => void; }> = (
         </div>
         <div className="space-y-3 text-sm text-slate-300">
           <p><span className="font-semibold text-slate-100">Segments</span> are planning blocks. Use them to describe the story flow (intro, build-up, outro). They do not render visuals directly.</p>
-          <p><span className="font-semibold text-slate-100">Clips</span> are the actual render items from your <code className="text-cyan-300">*.claw</code> files. Each clip has a start and duration, and can overlap with other clips in different lanes.</p>
+          <p><span className="font-semibold text-slate-100">Clips</span> are the actual render items from your <code className="text-cyan-300">*.claw</code> files. Each clip has a start and duration, and same-lane overlap is blocked while dragging/resizing.</p>
           <p><span className="font-semibold text-slate-100">Playhead</span> is the vertical white line. Drag it anywhere to scrub and preview that exact moment.</p>
           <p><span className="font-semibold text-slate-100">Handles</span> on the left and right side of segment/clip blocks resize timing. Drag the middle of a block to move it.</p>
           <p><span className="font-semibold text-slate-100">Zoom</span> controls change timeline scale so you can edit either broad structure or frame-level details.</p>
@@ -561,6 +680,12 @@ const App: React.FC = () => {
     ? timelineClips.reduce((maxLane, clip) => Math.max(maxLane, clip.lane), 0) * (clipLaneHeight + clipLaneGap) + clipLaneHeight + 14
     : 56);
 
+  const rangesOverlap = (aStart: number, aEnd: number, bStart: number, bEnd: number) => {
+    return aStart < bEnd - 0.0001 && bStart < aEnd - 0.0001;
+  };
+
+  const clipLaneById = new Map(timelineClips.map((clip) => [clip.id, clip.lane]));
+
   useEffect(() => {
     const onDragMove = (e: MouseEvent) => {
       if (!dragTarget) return;
@@ -580,17 +705,26 @@ const App: React.FC = () => {
       if (dragTarget.kind === 'segment') {
         setSegments((prev) => prev.map((segment) => {
           if (segment.id !== dragTarget.id) return segment;
+
+          let nextStart = segment.start;
+          let nextEnd = segment.end;
           if (dragTarget.action === 'move') {
             const span = dragTarget.originEnd - dragTarget.originStart;
-            const start = Math.max(0, Math.min(duration - span, dragTarget.originStart + delta));
-            return { ...segment, start, end: start + span };
+            nextStart = Math.max(0, Math.min(duration - span, dragTarget.originStart + delta));
+            nextEnd = nextStart + span;
+          } else if (dragTarget.action === 'resize-start') {
+            nextStart = Math.max(0, Math.min(dragTarget.originEnd - MIN_CLIP_DURATION, dragTarget.originStart + delta));
+          } else {
+            nextEnd = Math.min(duration, Math.max(dragTarget.originStart + MIN_CLIP_DURATION, dragTarget.originEnd + delta));
           }
-          if (dragTarget.action === 'resize-start') {
-            const start = Math.max(0, Math.min(dragTarget.originEnd - MIN_CLIP_DURATION, dragTarget.originStart + delta));
-            return { ...segment, start };
-          }
-          const end = Math.min(duration, Math.max(dragTarget.originStart + MIN_CLIP_DURATION, dragTarget.originEnd + delta));
-          return { ...segment, end };
+
+          const collides = prev.some((other) => {
+            if (other.id === segment.id) return false;
+            return rangesOverlap(nextStart, nextEnd, other.start, other.end);
+          });
+
+          if (collides) return segment;
+          return { ...segment, start: nextStart, end: nextEnd };
         }));
       } else {
         setClipOverrides((prev) => {
@@ -606,6 +740,15 @@ const App: React.FC = () => {
           } else {
             end = Math.min(duration, Math.max(dragTarget.originStart + MIN_CLIP_DURATION, dragTarget.originEnd + delta));
           }
+
+          const lane = clipLaneById.get(dragTarget.id);
+          const collides = timelineClips.some((clip) => {
+            if (clip.id === dragTarget.id) return false;
+            if (clip.lane !== lane) return false;
+            return rangesOverlap(start, end, clip.start, clip.end);
+          });
+
+          if (collides) return prev;
           return { ...prev, [dragTarget.id]: { start, end } };
         });
       }
