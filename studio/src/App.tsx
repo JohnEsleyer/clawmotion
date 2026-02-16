@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Play, Pause, Plus, Trash2, Download, Code, FileJson, Edit2, X,
   RefreshCw, ZoomIn, ZoomOut, Copy, GripVertical, GripHorizontal, Sparkles, FolderOpen,
-  Image as ImageIcon, Music, Video
+  Image as ImageIcon, Music, Video, CircleHelp
 } from 'lucide-react';
 import Editor from 'react-simple-code-editor';
 import Prism from 'prismjs';
@@ -32,6 +32,7 @@ const MIN_CLIP_DURATION = 0.12;
 type TimelineClipUI = {
   id: string;
   clipIndex: number;
+  lane: number;
   blueprintId: string;
   label: string;
   start: number;
@@ -166,6 +167,28 @@ const ExportProgressModal: React.FC<{ isOpen: boolean; progress: number; done: b
   );
 };
 
+const TimelineHelpModal: React.FC<{ isOpen: boolean; onClose: () => void; }> = ({ isOpen, onClose }) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[210] bg-black/85 p-8 flex items-center justify-center">
+      <div className="bg-[#0f0f1a] border border-slate-700 rounded-2xl w-full max-w-2xl p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-bold flex items-center gap-2"><CircleHelp className="w-5 h-5 text-cyan-300" />Timeline Guide</h3>
+          <button onClick={onClose}><X className="w-4 h-4" /></button>
+        </div>
+        <div className="space-y-3 text-sm text-slate-300">
+          <p><span className="font-semibold text-slate-100">Segments</span> are planning blocks. Use them to describe the story flow (intro, build-up, outro). They do not render visuals directly.</p>
+          <p><span className="font-semibold text-slate-100">Clips</span> are the actual render items from your <code className="text-cyan-300">*.claw</code> files. Each clip has a start and duration, and can overlap with other clips in different lanes.</p>
+          <p><span className="font-semibold text-slate-100">Playhead</span> is the vertical white line. Drag it anywhere to scrub and preview that exact moment.</p>
+          <p><span className="font-semibold text-slate-100">Handles</span> on the left and right side of segment/clip blocks resize timing. Drag the middle of a block to move it.</p>
+          <p><span className="font-semibold text-slate-100">Zoom</span> controls change timeline scale so you can edit either broad structure or frame-level details.</p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const buildDefaultFiles = (): FileEntry[] => ([
   {
     id: 'orch',
@@ -249,6 +272,7 @@ const App: React.FC = () => {
   ]);
   const [selectedSegmentId, setSelectedSegmentId] = useState<string>('');
   const [showExportModal, setShowExportModal] = useState(false);
+  const [showTimelineHelp, setShowTimelineHelp] = useState(false);
   const [exportProgress, setExportProgress] = useState(0);
   const [clipOverrides, setClipOverrides] = useState<Record<string, { start: number; end: number }>>({});
   const [dragTarget, setDragTarget] = useState<TimelineDragTarget | null>(null);
@@ -373,21 +397,42 @@ const App: React.FC = () => {
 
   const clips = studioEngineRef.current?.getState().clips || [];
 
-  const timelineClips: TimelineClipUI[] = clips.map((clip: any, idx: number) => {
-    const clipId = clip.id || `clip-${idx}-${clip.blueprintId}`;
-    const baseStart = clip.startTick / 30;
-    const baseEnd = (clip.startTick + clip.durationTicks) / 30;
-    const override = clipOverrides[clipId];
-    return {
-      id: clipId,
-      clipIndex: idx,
-      blueprintId: clip.blueprintId,
-      label: clip.id || clip.blueprintId,
-      start: override?.start ?? baseStart,
-      end: override?.end ?? baseEnd,
-      color: `hsl(${(idx * 47) % 360} 80% 55%)`
-    };
+  const timelineClips: TimelineClipUI[] = clips
+    .map((clip: any, idx: number) => {
+      const clipId = clip.id || `clip-${idx}-${clip.blueprintId}`;
+      const baseStart = clip.startTick / 30;
+      const baseEnd = (clip.startTick + clip.durationTicks) / 30;
+      const override = clipOverrides[clipId];
+      return {
+        id: clipId,
+        clipIndex: idx,
+        lane: 0,
+        blueprintId: clip.blueprintId,
+        label: clip.id || clip.blueprintId,
+        start: override?.start ?? baseStart,
+        end: override?.end ?? baseEnd,
+        color: `hsl(${(idx * 47) % 360} 80% 55%)`
+      };
+    })
+    .sort((a, b) => a.start - b.start || a.end - b.end);
+
+  const laneEnds: number[] = [];
+  timelineClips.forEach((clip) => {
+    let lane = laneEnds.findIndex((laneEnd) => laneEnd <= clip.start + 0.0001);
+    if (lane === -1) {
+      lane = laneEnds.length;
+      laneEnds.push(clip.end);
+    } else {
+      laneEnds[lane] = clip.end;
+    }
+    clip.lane = lane;
   });
+
+  const clipLaneHeight = 34;
+  const clipLaneGap = 8;
+  const clipTrackHeight = Math.max(56, timelineClips.length > 0
+    ? timelineClips.reduce((maxLane, clip) => Math.max(maxLane, clip.lane), 0) * (clipLaneHeight + clipLaneGap) + clipLaneHeight + 14
+    : 56);
 
   useEffect(() => {
     const onDragMove = (e: MouseEvent) => {
@@ -657,6 +702,13 @@ const App: React.FC = () => {
 
           <footer style={{ height: bottomPanelHeight }} className="bg-[#0f0f1a] border-t border-slate-800 flex flex-col shrink-0">
             <div className="h-10 border-b border-slate-800 px-3 flex items-center gap-3 text-xs">
+              <button
+                onClick={() => setShowTimelineHelp(true)}
+                className="p-1 rounded border border-slate-700 bg-slate-900 text-cyan-300 hover:text-cyan-200"
+                title="Timeline help"
+              >
+                <CircleHelp className="w-4 h-4" />
+              </button>
               <button onClick={togglePlay}>{isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}</button>
               <span className="font-mono">{currentTime.toFixed(2)}s / {duration.toFixed(2)}s</span>
               <button onClick={() => setTimelineScale((z) => Math.max(0.5, z - 0.2))}><ZoomOut className="w-4 h-4" /></button>
@@ -714,10 +766,12 @@ const App: React.FC = () => {
                   })}
                 </div>
 
-                <div className="h-14 rounded border border-slate-800 bg-slate-900/30 relative">
+                <div className="rounded border border-slate-800 bg-slate-900/30 relative" style={{ height: clipTrackHeight }}>
                   {timelineClips.map((clip) => {
                     const left = secondsToX(clip.start);
                     const width = Math.max(10, secondsToX(clip.end) - secondsToX(clip.start));
+                    const top = 6 + clip.lane * (clipLaneHeight + clipLaneGap);
+                    const durationLabel = `${(clip.end - clip.start).toFixed(2)}s`;
                     return (
                       <button
                         key={clip.id}
@@ -733,14 +787,17 @@ const App: React.FC = () => {
                           e.stopPropagation();
                           startDrag({ kind: 'clip', id: clip.id, action: 'move', originStart: clip.start, originEnd: clip.end }, e.clientX);
                         }}
-                        className="absolute top-2 h-9 rounded-lg border text-left px-2 overflow-hidden"
-                        style={{ left, width, background: `${clip.color}22`, borderColor: clip.color }}
+                        className="absolute h-8 rounded-md border text-left px-2 overflow-hidden shadow-sm"
+                        style={{ left, width, top, background: clip.color, borderColor: `${clip.color}dd` }}
                         title={`${clip.label} (${clip.start.toFixed(2)}s - ${clip.end.toFixed(2)}s)`}
                       >
                         <div className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize" onMouseDown={(e) => { e.stopPropagation(); startDrag({ kind: 'clip', id: clip.id, action: 'resize-start', originStart: clip.start, originEnd: clip.end }, e.clientX); }} />
                         <div className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize" onMouseDown={(e) => { e.stopPropagation(); startDrag({ kind: 'clip', id: clip.id, action: 'resize-end', originStart: clip.start, originEnd: clip.end }, e.clientX); }} />
-                        <div className="text-[10px] font-bold truncate">{clip.label}</div>
-                        <div className="text-[10px] text-slate-300 truncate">{clip.blueprintId}</div>
+                        <div className="text-[10px] font-bold text-slate-950 truncate tracking-tight">
+                          {clip.label}
+                          {width >= 130 && <span className="ml-1.5 opacity-70">• {durationLabel}</span>}
+                        </div>
+                        {width >= 190 && <div className="text-[9px] text-slate-950/70 truncate">{clip.blueprintId}</div>}
                       </button>
                     );
                   })}
@@ -812,6 +869,11 @@ const App: React.FC = () => {
         progress={exportProgress}
         done={exportProgress >= 100}
         onClose={() => setShowExportModal(false)}
+      />
+
+      <TimelineHelpModal
+        isOpen={showTimelineHelp}
+        onClose={() => setShowTimelineHelp(false)}
       />
 
       <AudioAnalysisModal
