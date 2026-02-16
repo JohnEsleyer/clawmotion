@@ -78,7 +78,7 @@ export class MotionFactory {
 
         // Initialize Player in Browser
         const page = this.bridge['page'] as any;
-        await page.evaluate(async (conf: any, clipList: any, audio: any, imageMap: any) => {
+        await page.evaluate(async (conf: any, clipList: any, audio: any, imageMap: any, camAnims: any) => {
             // @ts-ignore
             if (!window.ClawEngine) throw new Error("ClawEngine not found on window");
             // @ts-ignore
@@ -111,11 +111,17 @@ export class MotionFactory {
             }
 
             clipList.forEach((c: any) => engine.addClip(c));
+
+            // Inject Camera Animations
+            if (camAnims) {
+                engine.cameraAnimations = camAnims;
+            }
+
             // @ts-ignore
             const player = new window.ClawPlayer('#preview', engine);
             // @ts-ignore
             window.player = player;
-        }, config, clips, audioData, images);
+        }, config, clips, audioData, images, (config as any).cameraAnimations);
 
         // Setup FFmpeg
         const fps = config.fps;
@@ -151,9 +157,11 @@ export class MotionFactory {
                 onTick(tick);
             }
 
-            // Seek and capture
             // We pass the current config as state to sync dynamic changes
-            await this.bridge.seekToTick(tick, { camera: config.camera });
+            await this.bridge.seekToTick(tick, {
+                camera: config.camera,
+                effects: config.effects
+            });
             const frame = await this.bridge.captureFrame();
             passThrough.write(frame);
 

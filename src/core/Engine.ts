@@ -17,6 +17,11 @@ export interface ClawConfig {
     duration: number; // in seconds
     debug?: boolean;
     camera?: CameraConfig;
+    effects?: {
+        bloom?: number;
+        chromatic?: number;
+        vignette?: number;
+    };
 }
 
 export interface Transition {
@@ -48,6 +53,7 @@ export class ClawEngine {
     public clips: Clip[] = [];
     public audioData: Map<string, any[]> = new Map(); // trackId -> Array of FrameData
     public assets: Map<string, any> = new Map();
+    public cameraAnimations: Record<string, Keyframe[]> = {};
 
     private math: ClawMath;
 
@@ -86,7 +92,14 @@ export class ClawEngine {
 
         // 3. Global Camera & Transformations
         ctx.save();
-        const camera = this.config.camera || {};
+
+        // Resolve camera animations
+        const camera = { ...(this.config.camera || {}) };
+        Object.entries(this.cameraAnimations).forEach(([prop, keyframes]) => {
+            // @ts-ignore
+            camera[prop] = ClawAnimator.resolve(keyframes, tick);
+        });
+
         const zoom = camera.zoom || 1;
         const camX = camera.x || 0;
         const camY = camera.y || 0;

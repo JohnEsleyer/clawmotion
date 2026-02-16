@@ -3,3 +3,4 @@ export * from './Blueprint';
 export * from './Context';
 export * from './Math';
 export * from './Animator';
+export * from './AudioTrigger';

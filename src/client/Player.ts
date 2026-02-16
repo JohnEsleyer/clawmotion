@@ -1,9 +1,11 @@
 import { ClawEngine } from '../core/Engine';
+import { PostProcessor } from './PostProcessor';
 
 export class ClawPlayer {
     private container: HTMLElement;
-    private canvas: HTMLCanvasElement;
-    private ctx: CanvasRenderingContext2D;
+    private canvas2d: HTMLCanvasElement; // Hidden rendering canvas
+    private ctx2d: CanvasRenderingContext2D;
+    private postProcessor: PostProcessor;
     private engine: ClawEngine;
 
     private isPlaying: boolean = false;
@@ -21,14 +23,18 @@ export class ClawPlayer {
         }
 
         this.engine = engine;
-        this.canvas = document.createElement('canvas');
-        this.canvas.width = engine.config.width;
-        this.canvas.height = engine.config.height;
-        this.container.appendChild(this.canvas);
 
-        const context = this.canvas.getContext('2d');
+        // 1. Setup 2D Rendering Canvas (Hidden)
+        this.canvas2d = document.createElement('canvas');
+        this.canvas2d.width = engine.config.width;
+        this.canvas2d.height = engine.config.height;
+        const context = this.canvas2d.getContext('2d');
         if (!context) throw new Error('Could not get 2D context');
-        this.ctx = context;
+        this.ctx2d = context;
+
+        // 2. Setup PostProcessor and add its canvas to the DOM
+        this.postProcessor = new PostProcessor(engine.config.width, engine.config.height);
+        this.container.appendChild(this.postProcessor.getCanvas());
 
         // Initial render
         this.render();
@@ -79,7 +85,11 @@ export class ClawPlayer {
     };
 
     private render() {
-        this.engine.render(this.currentTick, this.ctx);
+        this.engine.render(this.currentTick, this.ctx2d);
+
+        // Apply Post-Processing
+        const effects = (this.engine.config as any).effects || {};
+        this.postProcessor.render(this.canvas2d, effects);
 
         // Sync Audio if available
         const audioAsset = this.engine.assets.get('main-audio') as HTMLAudioElement;
