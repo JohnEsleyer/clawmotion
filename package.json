@@ -1,9 +1,32 @@
 {
-  "name": "clawmotion",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "name": "@johnesleyer/clawmotion",
+  "version": "0.1.0",
+  "description": "Programmatic video motion engine for AI Agents",
+  "publishConfig": {
+    "access": "public"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./core": {
+      "import": "./dist/core/index.js",
+      "types": "./dist/core/index.d.ts"
+    },
+    "./server": {
+      "import": "./dist/server/index.js",
+      "types": "./dist/server/index.d.ts"
+    }
+  },
   "scripts": {
+    "build": "tsc && cp src/server/preview.html dist/server/ && esbuild dist/client/index.js --bundle --outfile=dist/bundle.js --platform=browser --format=iife",
+    "prepublishOnly": "npm run build",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

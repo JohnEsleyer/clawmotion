@@ -20,27 +20,38 @@ export class MotionFactory {
      * Bundle client code and start a local server.
      */
     private async startServer() {
-        // 1. Bundle Client Code
-        console.log('[Factory] Bundling client code with esbuild...');
-        try {
-            await esbuild.build({
-                entryPoints: [path.join(__dirname, '../client/index.ts')],
-                bundle: true,
-                outfile: path.join(__dirname, '../../dist/bundle.js'),
-                // globalName: 'ClawMotion', // Removing globalName to ensure side-effects (window assignment) run directly
-                platform: 'browser',
-            });
-            console.log('[Factory] Bundling complete.');
-        } catch (e) {
-            console.error('[Factory] Bundling failed:', e);
-            throw e;
+        // 1. Bundle Client Code if not already bundled or if we are in dev mode
+        const bundlePath = path.join(__dirname, '../../dist/bundle.js');
+        const clientEntryTs = path.join(__dirname, '../client/index.ts');
+        const clientEntryJs = path.join(__dirname, '../client/index.js');
+
+        if (!fs.existsSync(bundlePath)) {
+            console.log('[Factory] Bundling client code with esbuild...');
+            try {
+                const entryPoint = fs.existsSync(clientEntryTs) ? clientEntryTs : clientEntryJs;
+                if (!fs.existsSync(entryPoint)) {
+                    throw new Error(`Client entry point not found at ${clientEntryTs} or ${clientEntryJs}`);
+                }
+
+                await esbuild.build({
+                    entryPoints: [entryPoint],
+                    bundle: true,
+                    outfile: bundlePath,
+                    platform: 'browser',
+                    format: 'iife'
+                });
+                console.log('[Factory] Bundling complete.');
+            } catch (e) {
+                console.error('[Factory] Bundling failed:', e);
+                throw e;
+            }
         }
 
         // 2. Start Express
         console.log('[Factory] Starting Express server...');
         const app = express();
-        const staticPath = path.join(__dirname, '../../dist');
-        app.use(express.static(staticPath));
+        const distPath = path.join(__dirname, '../../dist');
+        app.use(express.static(distPath));
 
         app.get('/', (req, res) => {
             const htmlPath = path.join(__dirname, './preview.html');
