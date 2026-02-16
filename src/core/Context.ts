@@ -30,6 +30,11 @@ export interface BlueprintContext {
     localTime: number;
 
     /**
+     * The global time in seconds.
+     */
+    time: number;
+
+    /**
      * The global frame number.
      */
     tick: number;
