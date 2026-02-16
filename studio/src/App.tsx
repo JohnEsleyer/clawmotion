@@ -25,6 +25,28 @@ const SCREEN_SIZES = [
 ];
 
 const SEGMENT_COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6', '#a855f7'];
+const TIMELINE_MIN_WIDTH = 900;
+const TIMELINE_LEFT_PAD = 20;
+const MIN_CLIP_DURATION = 0.12;
+
+type TimelineClipUI = {
+  id: string;
+  clipIndex: number;
+  blueprintId: string;
+  label: string;
+  start: number;
+  end: number;
+  color: string;
+};
+
+type TimelineDragTarget = {
+  kind: 'segment' | 'clip' | 'playhead';
+  id: string;
+  action: 'move' | 'resize-start' | 'resize-end';
+  originClientX: number;
+  originStart: number;
+  originEnd: number;
+};
 
 const ClawLogo = () => (
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-white">
@@ -152,29 +174,51 @@ const buildDefaultFiles = (): FileEntry[] => ([
     code: `claw.setDuration(12);
 
 claw.addClip({
-  id: 'gradient-intro',
-  blueprintId: 'gradient-showcase.claw',
+  id: 'pulse-vortex',
+  blueprintId: 'neon-vortex.claw',
   startTick: claw.toTicks(0),
-  durationTicks: claw.toTicks(6),
+  durationTicks: claw.toTicks(12),
   layer: 0,
-  props: { palette: ['#0b1020', '#4c1d95', '#ec4899'] },
-  entry: { type: 'fade', durationTicks: claw.toTicks(0.8) },
-  exit: { type: 'zoom', durationTicks: claw.toTicks(0.8) }
+  props: { palette: ['#020617', '#6d28d9', '#ec4899', '#22d3ee'] },
+  entry: { type: 'fade', durationTicks: claw.toTicks(0.2) },
+  exit: { type: 'fade', durationTicks: claw.toTicks(0.2) }
 });
 
 claw.addClip({
-  id: 'text-reveal',
-  blueprintId: 'hero-title.claw',
-  startTick: claw.toTicks(2),
-  durationTicks: claw.toTicks(8),
+  id: 'dancer-body',
+  blueprintId: 'abstract-dancer.claw',
+  startTick: claw.toTicks(0.5),
+  durationTicks: claw.toTicks(11.2),
+  layer: 20,
+  entry: { type: 'zoom', durationTicks: claw.toTicks(0.45) },
+  exit: { type: 'zoom', durationTicks: claw.toTicks(0.65) }
+});
+
+claw.addClip({
+  id: 'beat-waves',
+  blueprintId: 'beat-waves.claw',
+  startTick: claw.toTicks(0),
+  durationTicks: claw.toTicks(12),
   layer: 10,
-  props: { title: 'Build beautiful motion with ClawMotion', subtitle: 'Studio' },
-  entry: { type: 'slide', durationTicks: claw.toTicks(1) },
-  exit: { type: 'fade', durationTicks: claw.toTicks(1) }
+  entry: { type: 'slide', durationTicks: claw.toTicks(0.35) },
+  exit: { type: 'fade', durationTicks: claw.toTicks(0.35) }
+});
+
+claw.addClip({
+  id: 'brand-tag',
+  blueprintId: 'hero-title.claw',
+  startTick: claw.toTicks(1.1),
+  durationTicks: claw.toTicks(9.9),
+  layer: 30,
+  props: { title: 'ClawMotion' },
+  entry: { type: 'slide', durationTicks: claw.toTicks(0.6) },
+  exit: { type: 'glitch', durationTicks: claw.toTicks(0.8) }
 });`
   },
-  { id: 'gradient-showcase', name: 'gradient-showcase.claw', type: 'clip', code: `(ctx) => { const { ctx: c, width, height } = ctx; const g = c.createLinearGradient(0, 0, width, height); g.addColorStop(0, '#0b1020'); g.addColorStop(1, '#ec4899'); c.fillStyle = g; c.fillRect(0, 0, width, height); }` },
-  { id: 'hero-title', name: 'hero-title.claw', type: 'clip', code: `(ctx) => { const { ctx: c, width, height } = ctx; c.fillStyle = 'white'; c.font = '700 56px Inter'; c.textAlign = 'center'; c.fillText('ClawMotion Studio', width / 2, height / 2); }` }
+  { id: 'neon-vortex', name: 'neon-vortex.claw', type: 'clip', code: `(ctx) => { const { ctx: c, width, height, time } = ctx; const pulse = 0.5 + 0.5 * Math.sin(time * 2.2); const g = c.createRadialGradient(width * 0.5, height * 0.5, 10, width * 0.5, height * 0.5, Math.max(width, height) * (0.35 + pulse * 0.4)); g.addColorStop(0, '#1e1b4b'); g.addColorStop(0.55, '#7e22ce'); g.addColorStop(1, '#020617'); c.fillStyle = g; c.fillRect(0, 0, width, height); c.globalAlpha = 0.18 + pulse * 0.25; c.fillStyle = '#22d3ee'; for (let i = 0; i < 7; i++) { const r = (time * 120 + i * 80) % (width * 1.1); c.beginPath(); c.arc(width * 0.5, height * 0.5, r, 0, Math.PI * 2); c.strokeStyle = i % 2 ? '#ec4899' : '#22d3ee'; c.lineWidth = 1 + (i % 3); c.stroke(); } c.globalAlpha = 1; }` },
+  { id: 'abstract-dancer', name: 'abstract-dancer.claw', type: 'clip', code: `(ctx) => { const { ctx: c, width, height, time } = ctx; const centerX = width * 0.5 + Math.sin(time * 4.3) * width * 0.06; const centerY = height * 0.56 + Math.sin(time * 6.2) * height * 0.025; const beat = 1 + Math.sin(time * 9.2) * 0.12; c.save(); c.translate(centerX, centerY); c.rotate(Math.sin(time * 2.1) * 0.18); c.fillStyle = '#f8fafc'; c.beginPath(); c.ellipse(0, -90 * beat, 56, 74, 0, 0, Math.PI * 2); c.fill(); c.fillStyle = '#22d3ee'; c.fillRect(-34 * beat, -14, 68 * beat, 148 * beat); c.fillStyle = '#ec4899'; c.fillRect(-126, -2, 92, 16 + Math.sin(time * 10) * 10); c.fillRect(34, -2, 92, 16 + Math.cos(time * 10) * 10); c.fillStyle = '#fde047'; c.fillRect(-52, 140, 40, 90); c.fillRect(12, 140, 40, 90); c.restore(); }` },
+  { id: 'beat-waves', name: 'beat-waves.claw', type: 'clip', code: `(ctx) => { const { ctx: c, width, height, time } = ctx; const lines = 26; c.globalCompositeOperation = 'screen'; for (let i = 0; i < lines; i++) { const y = (i / lines) * height; const amp = 8 + (i % 5) * 4; c.beginPath(); for (let x = 0; x <= width; x += 18) { const wave = Math.sin(x * 0.02 + time * (2.5 + i * 0.04)) * amp + Math.cos(time * 3 + i) * 3; if (x === 0) c.moveTo(x, y + wave); else c.lineTo(x, y + wave); } c.strokeStyle = i % 2 ? 'rgba(236,72,153,0.22)' : 'rgba(34,211,238,0.22)'; c.lineWidth = 1.2; c.stroke(); } c.globalCompositeOperation = 'source-over'; }` },
+  { id: 'hero-title', name: 'hero-title.claw', type: 'clip', code: `(ctx) => { const { ctx: c, width, height, time } = ctx; c.textAlign = 'center'; c.shadowColor = '#ec4899'; c.shadowBlur = 24; c.fillStyle = 'white'; c.font = '700 72px Inter'; c.fillText('ClawMotion', width / 2, height * 0.2 + Math.sin(time * 3) * 8); c.shadowBlur = 0; c.fillStyle = 'rgba(226,232,240,0.88)'; c.font = '500 18px Inter'; c.fillText('Abstract character dancing through the beat', width / 2, height * 0.2 + 34); }` }
 ]);
 
 const App: React.FC = () => {
@@ -199,13 +243,15 @@ const App: React.FC = () => {
   const [leftTab, setLeftTab] = useState<'explorer' | 'assets'>('explorer');
   const [error, setError] = useState<string | null>(null);
   const [segments, setSegments] = useState<TimelineSegment[]>([
-    { id: 'seg-1', name: 'Hook', description: 'Grab attention with color and motion.', start: 0, end: 4, color: SEGMENT_COLORS[0] },
-    { id: 'seg-2', name: 'Message', description: 'Reveal core statement and tone.', start: 4, end: 8, color: SEGMENT_COLORS[2] },
-    { id: 'seg-3', name: 'Finish', description: 'Polished outro with easing.', start: 8, end: 12, color: SEGMENT_COLORS[4] }
+    { id: 'seg-1', name: 'Ignition', description: 'Neon vortex opens with pulsing rings and camera snap.', start: 0, end: 3.2, color: SEGMENT_COLORS[0] },
+    { id: 'seg-2', name: 'Dance Core', description: 'Abstract character hits the beat with shape-driven choreography.', start: 3.2, end: 8.6, color: SEGMENT_COLORS[2] },
+    { id: 'seg-3', name: 'Final Drop', description: 'Glitch transition and branded finish on the final downbeat.', start: 8.6, end: 12, color: SEGMENT_COLORS[4] }
   ]);
   const [selectedSegmentId, setSelectedSegmentId] = useState<string>('');
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportProgress, setExportProgress] = useState(0);
+  const [clipOverrides, setClipOverrides] = useState<Record<string, { start: number; end: number }>>({});
+  const [dragTarget, setDragTarget] = useState<TimelineDragTarget | null>(null);
 
   const playerContainerRef = useRef<HTMLDivElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
@@ -305,22 +351,152 @@ const App: React.FC = () => {
     if (studioEngineRef.current) await studioEngineRef.current.seek(t);
   };
 
-  const timelineTotalWidth = Math.max(1000, Math.round(1000 * timelineScale));
+  const timelineTotalWidth = Math.max(TIMELINE_MIN_WIDTH, Math.round(1400 * timelineScale));
+  const timelineUsableWidth = Math.max(1, timelineTotalWidth - TIMELINE_LEFT_PAD * 2);
 
-  const handleTimelineClick = (e: React.MouseEvent<HTMLDivElement>) => {
+  const secondsToX = useCallback((seconds: number) => {
+    const clamped = Math.max(0, Math.min(duration, seconds));
+    return TIMELINE_LEFT_PAD + (clamped / duration) * timelineUsableWidth;
+  }, [duration, timelineUsableWidth]);
+
+  const xToSeconds = useCallback((x: number) => {
+    const normalized = Math.max(0, Math.min(timelineUsableWidth, x - TIMELINE_LEFT_PAD));
+    return (normalized / timelineUsableWidth) * duration;
+  }, [duration, timelineUsableWidth]);
+
+  const seekFromClientX = useCallback((clientX: number) => {
     if (!timelineRef.current) return;
     const rect = timelineRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left + timelineRef.current.scrollLeft;
-    seekTime((x / timelineTotalWidth) * duration);
-  };
+    const localX = clientX - rect.left + timelineRef.current.scrollLeft;
+    seekTime(xToSeconds(localX));
+  }, [xToSeconds]);
 
   const clips = studioEngineRef.current?.getState().clips || [];
+
+  const timelineClips: TimelineClipUI[] = clips.map((clip: any, idx: number) => {
+    const clipId = clip.id || `clip-${idx}-${clip.blueprintId}`;
+    const baseStart = clip.startTick / 30;
+    const baseEnd = (clip.startTick + clip.durationTicks) / 30;
+    const override = clipOverrides[clipId];
+    return {
+      id: clipId,
+      clipIndex: idx,
+      blueprintId: clip.blueprintId,
+      label: clip.id || clip.blueprintId,
+      start: override?.start ?? baseStart,
+      end: override?.end ?? baseEnd,
+      color: `hsl(${(idx * 47) % 360} 80% 55%)`
+    };
+  });
+
+  useEffect(() => {
+    const onDragMove = (e: MouseEvent) => {
+      if (!dragTarget) return;
+      e.preventDefault();
+      if (!timelineRef.current) return;
+
+      const rect = timelineRef.current.getBoundingClientRect();
+      const localX = e.clientX - rect.left + timelineRef.current.scrollLeft;
+      const nextTime = xToSeconds(localX);
+      const delta = nextTime - xToSeconds(dragTarget.originClientX - rect.left + timelineRef.current.scrollLeft);
+
+      if (dragTarget.kind === 'playhead') {
+        seekFromClientX(e.clientX);
+        return;
+      }
+
+      if (dragTarget.kind === 'segment') {
+        setSegments((prev) => prev.map((segment) => {
+          if (segment.id !== dragTarget.id) return segment;
+          if (dragTarget.action === 'move') {
+            const span = dragTarget.originEnd - dragTarget.originStart;
+            const start = Math.max(0, Math.min(duration - span, dragTarget.originStart + delta));
+            return { ...segment, start, end: start + span };
+          }
+          if (dragTarget.action === 'resize-start') {
+            const start = Math.max(0, Math.min(dragTarget.originEnd - MIN_CLIP_DURATION, dragTarget.originStart + delta));
+            return { ...segment, start };
+          }
+          const end = Math.min(duration, Math.max(dragTarget.originStart + MIN_CLIP_DURATION, dragTarget.originEnd + delta));
+          return { ...segment, end };
+        }));
+      } else {
+        setClipOverrides((prev) => {
+          const current = prev[dragTarget.id] ?? { start: dragTarget.originStart, end: dragTarget.originEnd };
+          let start = current.start;
+          let end = current.end;
+          if (dragTarget.action === 'move') {
+            const span = dragTarget.originEnd - dragTarget.originStart;
+            start = Math.max(0, Math.min(duration - span, dragTarget.originStart + delta));
+            end = start + span;
+          } else if (dragTarget.action === 'resize-start') {
+            start = Math.max(0, Math.min(dragTarget.originEnd - MIN_CLIP_DURATION, dragTarget.originStart + delta));
+          } else {
+            end = Math.min(duration, Math.max(dragTarget.originStart + MIN_CLIP_DURATION, dragTarget.originEnd + delta));
+          }
+          return { ...prev, [dragTarget.id]: { start, end } };
+        });
+      }
+      seekFromClientX(e.clientX);
+    };
+
+    const onDragUp = () => setDragTarget(null);
+
+    window.addEventListener('mousemove', onDragMove);
+    window.addEventListener('mouseup', onDragUp);
+    return () => {
+      window.removeEventListener('mousemove', onDragMove);
+      window.removeEventListener('mouseup', onDragUp);
+    };
+  }, [dragTarget, duration, seekFromClientX, xToSeconds]);
+
+  useEffect(() => {
+    if (!studioEngineRef.current) return;
+    const engineClips = studioEngineRef.current.getState().clips;
+    let changed = false;
+    engineClips.forEach((clip: any, idx: number) => {
+      const clipId = clip.id || `clip-${idx}-${clip.blueprintId}`;
+      const override = clipOverrides[clipId];
+      if (!override) return;
+      const startTick = Math.round(override.start * 30);
+      const durationTicks = Math.max(1, Math.round((override.end - override.start) * 30));
+      if (clip.startTick !== startTick || clip.durationTicks !== durationTicks) {
+        clip.startTick = startTick;
+        clip.durationTicks = durationTicks;
+        changed = true;
+      }
+    });
+    if (changed) {
+      void seekTime(currentTime);
+    }
+  }, [clipOverrides, currentTime]);
+
+  const startDrag = (drag: Omit<TimelineDragTarget, 'originClientX'>, clientX: number) => {
+    setDragTarget({ ...drag, originClientX: clientX });
+  };
+
+  const handleTimelinePointerDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.target !== e.currentTarget) return;
+    seekFromClientX(e.clientX);
+    startDrag({ kind: 'playhead', id: '__playhead__', action: 'move', originStart: currentTime, originEnd: currentTime }, e.clientX);
+  };
+
+  const rulerMarks = (() => {
+    const marks: Array<{ time: number; major: boolean }> = [];
+    const minorStep = duration <= 8 ? 0.1 : duration <= 30 ? 0.25 : 0.5;
+    const total = Math.floor(duration / minorStep);
+    for (let i = 0; i <= total; i++) {
+      const time = i * minorStep;
+      marks.push({ time, major: Math.abs(time - Math.round(time)) < 0.0001 });
+    }
+    return marks;
+  })();
 
   const buildFullContext = () => {
     const clipSummaries = clips.map((c: any) => `${c.id || c.blueprintId}: ${c.blueprintId} [${(c.startTick / 30).toFixed(2)}s - ${((c.startTick + c.durationTicks) / 30).toFixed(2)}s]`).join('\n');
     const segmentSummary = segments.map((s) => `- ${s.name} (${s.start.toFixed(2)}-${s.end.toFixed(2)}): ${s.description}`).join('\n');
 
-    return `# Studio Context\n\n${FULL_COMPREHENSIVE_GUIDE}\n\n## Timeline Segments\n${segmentSummary}\n\n## Active Clips\n${clipSummaries || 'none'}\n\n## Files\n${files.map((f) => `- ${f.name} (${f.type})`).join('\n')}\n\n## Assets\n${assets.map((a) => `- ${a.name} (${a.type}) ${a.metadata ? `[${a.metadata.summary}]` : ''}`).join('\n') || 'none'}\n\n## Current File (${activeFile.name})\n\n\`\`\`typescript\n${activeFile.code}\n\`\`\``;
+    return `# Studio Context\n\n${FULL_COMPREHENSIVE_GUIDE}\n\n## Timeline Segments\n${segmentSummary}\n\n## Active Clips\n${clipSummaries || 'none'}\n\n## Files\n${files.map((f) => `- ${f.name} (${f.type})`).join('\n')}\n\n## Imported Assets (full context to use in generation)\n${assets.map((a) => `- ${a.name} [${a.id}] (${a.type}) url=${a.url} ${a.metadata ? `[${a.metadata.summary}]` : ''}`).join('\n') || 'none'}\n\n## Current File (${activeFile.name})\n\n\`\`\`typescript\n${activeFile.code}\n\`\`\``;
   };
 
   const handleSendMessage = async () => {
@@ -388,7 +564,7 @@ const App: React.FC = () => {
       <header className="flex items-center justify-between px-4 py-2 bg-[#0f0f1a] border-b border-red-900/30 shrink-0 z-50 gap-3">
         <div className="flex items-center gap-3">
           <ClawLogo />
-          <span className="font-bold tracking-tighter text-lg">clawmotion <span className="text-red-500">studio</span></span>
+          <span className="font-bold tracking-tighter text-lg">clawmotion</span>
         </div>
         <div className="flex items-center gap-2 flex-wrap justify-end">
           <select value={selectedSize.id} onChange={(e) => setSelectedSize(SCREEN_SIZES.find((s) => s.id === e.target.value)!)} className="text-xs bg-slate-900 border border-slate-700 rounded px-2 py-1">
@@ -488,33 +664,63 @@ const App: React.FC = () => {
               <button onClick={() => setTimelineScale((z) => Math.min(8, z + 0.2))}><ZoomIn className="w-4 h-4" /></button>
               <button onClick={addSegment} className="ml-2 px-2 py-1 rounded bg-slate-800 text-[10px]"><Plus className="w-3 h-3 inline mr-1" />Segment</button>
             </div>
-            <div ref={timelineRef} onClick={handleTimelineClick} className="flex-1 relative overflow-x-auto custom-scrollbar cursor-pointer">
+            <div ref={timelineRef} onMouseDown={handleTimelinePointerDown} className="flex-1 relative overflow-x-auto custom-scrollbar cursor-pointer">
               <div className="h-full p-2" style={{ width: timelineTotalWidth }}>
                 <div className="text-[10px] uppercase font-black text-slate-500 mb-1">Timeline</div>
 
-                <div className="h-12 rounded border border-slate-800 bg-slate-900/30 relative mb-2 overflow-hidden">
-                  {segments.map((s) => (
-                    <button
-                      key={s.id}
-                      onClick={(e) => { e.stopPropagation(); setSelectedSegmentId(s.id); }}
-                      className="absolute top-0 bottom-0 border-r border-black/30 text-left px-2"
-                      style={{ left: `${(s.start / duration) * 100}%`, width: `${((s.end - s.start) / duration) * 100}%`, background: `${s.color}66` }}
-                      title={`${s.name}: ${s.start.toFixed(2)}s - ${s.end.toFixed(2)}s`}
-                    >
-                      <div className="text-[10px] font-semibold truncate">{s.name}</div>
-                      <div className="text-[9px] opacity-80 truncate">{s.description}</div>
-                    </button>
+                <div className="h-9 rounded border border-slate-800 bg-slate-900/30 relative mb-2 overflow-hidden">
+                  {rulerMarks.map((mark) => (
+                    <div key={`r-${mark.time.toFixed(3)}`} className="absolute top-0 bottom-0" style={{ left: `${secondsToX(mark.time)}px` }}>
+                      <div className={`w-px ${mark.major ? 'h-5 bg-slate-300' : 'h-3 bg-slate-600'}`} />
+                      {mark.major && <div className="text-[9px] mt-0.5 -translate-x-1/2 text-slate-300">{mark.time.toFixed(0)}s / {(mark.time * 1000).toFixed(0)}ms</div>}
+                    </div>
                   ))}
                 </div>
 
-                <div className="h-14 rounded border border-slate-800 bg-slate-900/30 relative">
-                  {clips.map((clip: any, idx: number) => {
-                    const start = clip.startTick / 30;
-                    const end = (clip.startTick + clip.durationTicks) / 30;
-                    const color = `hsl(${(idx * 47) % 360} 80% 55%)`;
+                <div className="h-12 rounded border border-slate-800 bg-slate-900/30 relative mb-2 overflow-hidden">
+                  {segments.map((s) => {
+                    const left = secondsToX(s.start);
+                    const width = Math.max(8, secondsToX(s.end) - secondsToX(s.start));
                     return (
                       <button
-                        key={clip.id || idx}
+                        key={s.id}
+                        onClick={(e) => { e.stopPropagation(); setSelectedSegmentId(s.id); }}
+                        onMouseDown={(e) => {
+                          e.stopPropagation();
+                          startDrag({ kind: 'segment', id: s.id, action: 'move', originStart: s.start, originEnd: s.end }, e.clientX);
+                        }}
+                        className="absolute top-0 bottom-0 border-r border-black/30 text-left px-2"
+                        style={{ left, width, background: `${s.color}66` }}
+                        title={`${s.name}: ${s.start.toFixed(2)}s - ${s.end.toFixed(2)}s`}
+                      >
+                        <div
+                          className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize"
+                          onMouseDown={(e) => {
+                            e.stopPropagation();
+                            startDrag({ kind: 'segment', id: s.id, action: 'resize-start', originStart: s.start, originEnd: s.end }, e.clientX);
+                          }}
+                        />
+                        <div
+                          className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize"
+                          onMouseDown={(e) => {
+                            e.stopPropagation();
+                            startDrag({ kind: 'segment', id: s.id, action: 'resize-end', originStart: s.start, originEnd: s.end }, e.clientX);
+                          }}
+                        />
+                        <div className="text-[10px] font-semibold truncate">{s.name}</div>
+                        <div className="text-[9px] opacity-80 truncate">{s.description}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="h-14 rounded border border-slate-800 bg-slate-900/30 relative">
+                  {timelineClips.map((clip) => {
+                    const left = secondsToX(clip.start);
+                    const width = Math.max(10, secondsToX(clip.end) - secondsToX(clip.start));
+                    return (
+                      <button
+                        key={clip.id}
                         onClick={(e) => {
                           e.stopPropagation();
                           const file = files.find((f) => f.name === clip.blueprintId);
@@ -523,18 +729,24 @@ const App: React.FC = () => {
                             setActiveTab('code');
                           }
                         }}
+                        onMouseDown={(e) => {
+                          e.stopPropagation();
+                          startDrag({ kind: 'clip', id: clip.id, action: 'move', originStart: clip.start, originEnd: clip.end }, e.clientX);
+                        }}
                         className="absolute top-2 h-9 rounded-lg border text-left px-2 overflow-hidden"
-                        style={{ left: `${(start / duration) * 100}%`, width: `${((end - start) / duration) * 100}%`, background: `${color}22`, borderColor: color }}
-                        title={`${clip.id || clip.blueprintId} (${start.toFixed(2)}s - ${end.toFixed(2)}s)`}
+                        style={{ left, width, background: `${clip.color}22`, borderColor: clip.color }}
+                        title={`${clip.label} (${clip.start.toFixed(2)}s - ${clip.end.toFixed(2)}s)`}
                       >
-                        <div className="text-[10px] font-bold truncate">{clip.id || clip.blueprintId}</div>
+                        <div className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize" onMouseDown={(e) => { e.stopPropagation(); startDrag({ kind: 'clip', id: clip.id, action: 'resize-start', originStart: clip.start, originEnd: clip.end }, e.clientX); }} />
+                        <div className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize" onMouseDown={(e) => { e.stopPropagation(); startDrag({ kind: 'clip', id: clip.id, action: 'resize-end', originStart: clip.start, originEnd: clip.end }, e.clientX); }} />
+                        <div className="text-[10px] font-bold truncate">{clip.label}</div>
                         <div className="text-[10px] text-slate-300 truncate">{clip.blueprintId}</div>
                       </button>
                     );
                   })}
                 </div>
 
-                <div className="absolute top-0 bottom-0 w-px bg-white playhead z-30" style={{ left: `${(currentTime / duration) * 100}%` }} />
+                <div className="absolute top-0 bottom-0 w-px bg-white playhead z-30" style={{ left: `${secondsToX(currentTime)}px` }} />
               </div>
             </div>
           </footer>
