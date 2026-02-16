@@ -1,0 +1,69 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg-deep: #050505;
+  --color-bg-secondary: #0a0a0a;
+  --color-border: #1a1a1a;
+  --color-primary-red: #ef4444;
+  --color-glow-red: rgba(239, 68, 68, 0.1);
+}
+
+:root {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background-color: var(--color-bg-deep);
+  color: #e2e8f0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+pre[class*="language-"], code[class*="language-"] {
+  background: transparent !important;
+  text-shadow: none !important;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace !important;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #0a0a0a;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #333;
+  border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #444;
+}
+
+.timeline-track {
+  background: linear-gradient(90deg, transparent 0%, rgba(239, 68, 68, 0.05) 50%, transparent 100%);
+}
+
+.playhead {
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.8), 0 0 20px rgba(239, 68, 68, 0.4);
+}
+
+.panel-glow {
+  box-shadow: inset 0 0 30px rgba(239, 68, 68, 0.03);
+}
+
+@keyframes pulse-red {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.pulse-red {
+  animation: pulse-red 2s ease-in-out infinite;
+}
