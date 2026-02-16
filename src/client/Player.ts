@@ -30,7 +30,12 @@ export class ClawPlayer {
 
         // 2. Setup PostProcessor and add its canvas to the DOM
         this.postProcessor = new PostProcessor(engine.config.width, engine.config.height);
-        this.container.appendChild(this.postProcessor.getCanvas());
+        const outputCanvas = this.postProcessor.getCanvas();
+        outputCanvas.style.display = 'block';
+        outputCanvas.style.width = '100%';
+        outputCanvas.style.height = '100%';
+        outputCanvas.style.imageRendering = 'auto';
+        this.container.appendChild(outputCanvas);
 
         // Initial render
         this.render();

@@ -30,6 +30,15 @@ const SCREEN_SIZES = [
 
 const SECTION_COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6', '#a855f7', '#ec4899'];
 
+const ClawLogo = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-white">
+    <path d="M14 8c-1.1-1.1-1.4-2.6-1-4-2 .5-4 2-5 4-3 5-2 11 2 12" />
+    <path d="M20 10c-1-2-3-3-5-3" />
+    <path d="M6 10c-1.5 2-2 5-1 8s4 4 8 2" />
+    <circle cx="12" cy="12" r="2" className="fill-red-500 stroke-none" />
+  </svg>
+);
+
 // Re-using components from prototype...
 const PasteContextModal: React.FC<{ isOpen: boolean; onClose: () => void; onImport: (text: string) => void }> = ({ isOpen, onClose, onImport }) => {
   const [text, setText] = useState("");
@@ -530,10 +539,8 @@ const App: React.FC = () => {
     <div className="flex flex-col h-screen overflow-hidden bg-[#0a0a0f] text-slate-200">
       <header className="flex items-center justify-between px-6 py-3 bg-[#0f0f1a] border-b border-red-900/30 shrink-0 z-50">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-gradient-to-br from-red-600 to-rose-600 rounded-lg flex items-center justify-center shadow-lg">
-            <span className="font-black text-white text-xs">CLAW</span>
-          </div>
-          <span className="font-bold text-slate-200 tracking-tight">Studio</span>
+          <ClawLogo />
+          <span className="font-bold text-white tracking-tighter text-lg">clawmotion</span>
         </div>
         <div className="flex items-center gap-3">
           <button onClick={() => setShowAssetModal(true)} className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-md text-sm font-bold text-slate-300 transition-all">
@@ -563,7 +570,7 @@ const App: React.FC = () => {
           </div>
         </aside>
 
-        <div className="flex-1 flex flex-col min-w-0 bg-[#0a0a0f] relative items-center justify-center p-4">
+        <div className="flex-1 flex flex-col min-w-0 bg-[#050505] relative items-center justify-center p-4">
           <div className="h-12 w-full absolute top-0 left-0 right-0 bg-slate-900/50 border-b border-slate-800/50 flex items-center justify-between px-4 shrink-0 z-10">
             <div className="flex gap-4 items-center">
               <select value={selectedSize.id} onChange={(e) => setSelectedSize(SCREEN_SIZES.find(s => s.id === e.target.value)!)} className="bg-transparent text-xs font-bold text-slate-300 outline-none">
@@ -580,12 +587,13 @@ const App: React.FC = () => {
 
           <div
             ref={playerContainerRef}
-            className="relative shadow-2xl bg-black overflow-hidden rounded-lg border border-slate-800"
+            className="relative shadow-[0_0_50px_rgba(0,0,0,0.8)] border border-zinc-800 bg-black group overflow-hidden"
             style={{
-              width: '100%',
-              height: '100%',
-              maxWidth: selectedSize.width,
-              maxHeight: selectedSize.height,
+              aspectRatio: `${selectedSize.width}/${selectedSize.height}`,
+              maxHeight: '100%',
+              maxWidth: '100%',
+              height: selectedSize.width > selectedSize.height ? 'auto' : '100%',
+              width: selectedSize.width > selectedSize.height ? '100%' : 'auto',
             }}
           />
 
