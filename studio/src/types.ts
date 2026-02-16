@@ -40,6 +40,15 @@ export interface FileEntry {
     type: 'clip' | 'orchestrator';
 }
 
+export interface TimelineSegment {
+    id: string;
+    name: string;
+    description: string;
+    start: number;
+    end: number;
+    color: string;
+}
+
 export interface Project {
     name: string;
     width: number;

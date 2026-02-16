@@ -86,19 +86,48 @@ STYLE PREFERENCE:
 `;
 
 export const FULL_COMPREHENSIVE_GUIDE = `
-# ClawStudio LLM Guide
+# ClawStudio LLM Guide (Full Context)
 
-Purpose: TypeScript video engine for programmatic compositions using the ClawMotion engine.
+You are controlling ClawMotion Studio: a timeline-based editor for programmatic animations.
 
-## Orchestrator API (Timeline)
+## What you can control
+- Files in the Explorer (create, rename, delete, edit).
+- Timeline clips via orchestrator.ts ('claw.addClip', 'claw.setDuration').
+- Blueprint drawing logic in '*.claw' files.
+- Timeline segments (narrative flow markers with start/end/name/description).
+- Assets: local uploads + web imports via URLs.
 
-- \`claw.setDuration(seconds: number)\`
-- \`claw.addClip(clip: Clip)\`
-- \`claw.toTicks(seconds: number): number\`
+## Scene + timing model
+- Time units: seconds in UI, ticks in engine ('claw.toTicks(seconds)').
+- Clip references a blueprint file by 'blueprintId' (exact filename).
+- Timeline clips are visual blocks. Clicking one should open that blueprint file.
+- Segments define desired content flow for LLM planning:
+  - 'name'
+  - 'description'
+  - 'start' / 'end' seconds
 
 ## Blueprint API
-
 \`\`\`typescript
-(ctx: BlueprintContext) => { ... }
+(ctx: BlueprintContext) => {
+  const { ctx: c, width, height, localTime, props, utils, audio } = ctx;
+}
 \`\`\`
+
+## Animation quality expectations
+- Deterministic visuals: use 'ctx.utils' rather than 'Math.random()'.
+- Strong transitions: leverage clip 'entry' and 'exit' where suitable.
+- Layer composition for cinematic result.
+- Use harmonious palettes, depth, and motion polish.
+
+## Asset workflow
+- Use "getAsset('filename.ext')" inside blueprints.
+- Imported audio includes metadata summary/segments/beats when available.
+- You may suggest and import web assets by URL when needed.
+
+## Output formatting rules for assistant responses
+When producing code edits:
+- Always return full file content for touched files.
+- Keep orchestrator valid TypeScript.
+- Keep blueprint files pure drawing functions.
+- Preserve existing good behavior unless user asks to replace it.
 `;
