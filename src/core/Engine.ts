@@ -149,6 +149,7 @@ export class ClawEngine {
 
             const context: BlueprintContext = {
                 ctx,
+                time: tick / this.config.fps,
                 tick,
                 width: this.config.width,
                 height: this.config.height,
@@ -277,6 +278,7 @@ export class ClawEngine {
 
             const context: BlueprintContext = {
                 ctx,
+                time: tick / this.config.fps,
                 tick,
                 width: this.config.width,
                 height: this.config.height,
