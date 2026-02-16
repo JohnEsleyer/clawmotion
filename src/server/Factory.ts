@@ -140,11 +140,20 @@ export class MotionFactory {
             if (imageMap) {
                 for (const [id, url] of Object.entries(imageMap)) {
                     const assetUrl = url as string;
+                    const resolvedAssetUrl = (
+                        assetUrl.startsWith('http://') ||
+                        assetUrl.startsWith('https://') ||
+                        assetUrl.startsWith('data:') ||
+                        assetUrl.startsWith('blob:') ||
+                        assetUrl.startsWith('/assets/')
+                    )
+                        ? assetUrl
+                        : `/assets/${assetUrl.replace(/^\.?\//, '')}`;
                     if (assetUrl.endsWith('.mp4') || assetUrl.endsWith('.webm')) {
-                        const video = await loader.loadVideo(assetUrl);
+                        const video = await loader.loadVideo(resolvedAssetUrl);
                         engine.assets.set(id, video);
                     } else {
-                        const img = await loader.loadImage(assetUrl);
+                        const img = await loader.loadImage(resolvedAssetUrl);
                         engine.assets.set(id, img);
                     }
                 }
