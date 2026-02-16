@@ -178,6 +178,14 @@ const AudioAnalysisModal: React.FC<{
     }
   };
 
+  const stopPreview = () => {
+    if (!audioRef.current) return;
+    audioRef.current.pause();
+    audioRef.current.currentTime = 0;
+    setIsPreviewPlaying(false);
+    setPreviewTime(0);
+  };
+
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90 p-8">
       <div className="bg-[#0f0f1a] border border-slate-700 w-full max-w-6xl rounded-2xl p-6 space-y-4 max-h-[92vh] overflow-y-auto custom-scrollbar">
@@ -271,7 +279,7 @@ const AudioAnalysisModal: React.FC<{
         </div>
 
         <div className="flex justify-end gap-3">
-          <button onClick={onClose} className="px-4 py-2 text-xs">Cancel</button>
+          <button onClick={() => { stopPreview(); onClose(); }} className="px-4 py-2 text-xs">Cancel</button>
           <button onClick={() => {
             const normalizedSections = sections
               .filter((section) => section.end > section.start)
@@ -284,6 +292,7 @@ const AudioAnalysisModal: React.FC<{
               summary: generateAudioSummary(metadata.duration, beats, normalizedSections)
             };
             onSave(asset.id, nextMetadata);
+            stopPreview();
             onClose();
           }} className="px-4 py-2 text-xs rounded bg-emerald-600">Save</button>
         </div>
