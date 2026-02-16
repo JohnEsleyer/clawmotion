@@ -1,6 +1,14 @@
 import { BlueprintRegistry } from './Blueprint';
 import { BlueprintContext } from './Context';
-import { ClawMath } from './Math';
+import { ClawMath, Easing } from './Math';
+import { ClawAnimator } from './Animator';
+
+export interface CameraConfig {
+    x?: number;
+    y?: number;
+    zoom?: number;
+    shake?: number; // Intensity of screen shake (0-1)
+}
 
 export interface ClawConfig {
     width: number;
@@ -8,11 +16,18 @@ export interface ClawConfig {
     fps: number;
     duration: number; // in seconds
     debug?: boolean;
+    camera?: CameraConfig;
 }
 
 export interface Transition {
     type: 'fade' | 'slide' | 'zoom';
     durationTicks: number;
+}
+
+export interface Keyframe {
+    tick: number; // Local tick within the clip (0 to durationTicks)
+    value: any;
+    easing?: keyof typeof Easing;
 }
 
 export interface Clip {
@@ -22,6 +37,7 @@ export interface Clip {
     durationTicks: number; // Length in frames
     layer?: number;
     props?: Record<string, any>;
+    animations?: Record<string, Keyframe[]>;
     entry?: Transition;
     exit?: Transition;
 }
@@ -63,15 +79,35 @@ export class ClawEngine {
      * @param ctx The drawing context (Canvas2D or WebGL).
      */
     public render(tick: number, ctx: any) {
-        // Clear canvas (assuming 2D for now, but abstracting later)
+        // 2. Clear canvas
         if (ctx.clearRect) {
             ctx.clearRect(0, 0, this.config.width, this.config.height);
-        } else if (ctx.clear) {
-            // WebGL clear logic would go here
-            // gl.clear(gl.COLOR_BUFFER_BIT);
         }
 
-        // Find and sort active clips
+        // 3. Global Camera & Transformations
+        ctx.save();
+        const camera = this.config.camera || {};
+        const zoom = camera.zoom || 1;
+        const camX = camera.x || 0;
+        const camY = camera.y || 0;
+        const shake = camera.shake || 0;
+
+        // Apply Shake (Deterministic)
+        if (shake > 0) {
+            // Using a high-frequency sine based on tick for deterministic "rumble"
+            const shakeX = Math.sin(tick * 1.5) * shake * 20;
+            const shakeY = Math.cos(tick * 1.7) * shake * 20;
+            ctx.translate(shakeX, shakeY);
+        }
+
+        // Apply Pan & Zoom
+        if (zoom !== 1 || camX !== 0 || camY !== 0) {
+            ctx.translate(this.config.width / 2, this.config.height / 2);
+            ctx.scale(zoom, zoom);
+            ctx.translate(-this.config.width / 2 + camX, -this.config.height / 2 + camY);
+        }
+
+        // 4. Find and sort active clips
         const activeClips = this.clips
             .filter(c => tick >= c.startTick && tick < (c.startTick + c.durationTicks))
             .sort((a, b) => (a.layer || 0) - (b.layer || 0));
@@ -125,6 +161,14 @@ export class ClawEngine {
                 ctx.translate(-this.config.width / 2, -this.config.height / 2);
             }
 
+            // Merge static props with animated properties
+            const resolvedProps = { ...(clip.props || {}) };
+            if (clip.animations) {
+                Object.entries(clip.animations).forEach(([prop, keyframes]) => {
+                    resolvedProps[prop] = ClawAnimator.resolve(keyframes, localTick);
+                });
+            }
+
             const context: BlueprintContext = {
                 ctx,
                 tick,
@@ -133,13 +177,16 @@ export class ClawEngine {
                 localTime,
                 utils: this.math,
                 audio,
-                props: clip.props || {},
+                props: resolvedProps,
                 getAsset: (id: string) => this.assets.get(id)
             };
 
             blueprint(context);
             ctx.restore();
         }
+
+        // Restore global camera
+        ctx.restore();
     }
 
     /**

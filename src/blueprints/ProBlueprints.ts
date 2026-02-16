@@ -149,5 +149,24 @@ export const ProBlueprints = {
         ctx.ctx.fillText(props.subtitle || 'Premium Quality', x + 20, y + 70);
 
         ctx.ctx.restore();
+    },
+
+    'vignette': (ctx: BlueprintContext) => {
+        const { width, height, props } = ctx;
+        const color = props.color || 'black';
+        const intensity = props.intensity ?? 0.5;
+
+        const grad = ctx.ctx.createRadialGradient(
+            width / 2, height / 2, 0,
+            width / 2, height / 2, Math.sqrt(width ** 2 + height ** 2) / 1.5
+        );
+        grad.addColorStop(0, 'transparent');
+        grad.addColorStop(1, color);
+
+        ctx.ctx.save();
+        ctx.ctx.globalAlpha = intensity;
+        ctx.ctx.fillStyle = grad;
+        ctx.ctx.fillRect(0, 0, width, height);
+        ctx.ctx.restore();
     }
 };

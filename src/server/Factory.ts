@@ -66,7 +66,7 @@ export class MotionFactory {
     /**
      * Render the video to a file.
      */
-    public async render(config: ClawConfig, clips: Clip[], outputPath: string, audioData?: any, images?: Record<string, string>) {
+    public async render(config: ClawConfig, clips: Clip[], outputPath: string, audioData?: any, images?: Record<string, string>, onTick?: (tick: number) => void) {
         await this.startServer();
 
         // Launch Browser
@@ -142,13 +142,20 @@ export class MotionFactory {
             })
             .save(outputPath);
 
-        // Loop through frames
-        console.log(`Starting render: ${durationTicks} frames...`);
+        const totalTicks = config.duration * fps;
+        console.log(`Starting render: ${totalTicks} frames...`);
 
-        for (let tick = 0; tick < durationTicks; tick++) {
-            await this.bridge.seekToTick(tick);
-            const buffer = await this.bridge.captureFrame();
-            passThrough.write(buffer);
+        for (let tick = 0; tick < totalTicks; tick++) {
+            // Apply dynamic state if onTick is provided
+            if (onTick) {
+                onTick(tick);
+            }
+
+            // Seek and capture
+            // We pass the current config as state to sync dynamic changes
+            await this.bridge.seekToTick(tick, { camera: config.camera });
+            const frame = await this.bridge.captureFrame();
+            passThrough.write(frame);
 
             if (tick % 30 === 0) console.log(`Rendered frame ${tick}/${durationTicks}`);
         }

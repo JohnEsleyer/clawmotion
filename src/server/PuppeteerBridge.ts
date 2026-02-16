@@ -25,18 +25,23 @@ export class PuppeteerBridge {
      * Seek the player on the page to a specific tick.
      * Assumes window.player is exposed.
      */
-    public async seekToTick(tick: number) {
+    public async seekToTick(tick: number, state?: any) {
         if (!this.page) throw new Error('Page not initialized');
 
-        await this.page.evaluate((t) => {
+        await this.page.evaluate((t, s) => {
             // @ts-ignore
             if (window.player) {
+                // @ts-ignore
+                if (s) {
+                    // @ts-ignore
+                    Object.assign(window.player.engine.config, s);
+                }
                 // @ts-ignore
                 window.player.seek(t);
             } else {
                 throw new Error('Player not found on window');
             }
-        }, tick);
+        }, tick, state);
     }
 
     /**
