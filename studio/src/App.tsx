@@ -186,16 +186,6 @@ const AudioAnalysisModal: React.FC<{
     setPreviewTime(0);
   };
 
-  useEffect(() => {
-    const interval = window.setInterval(() => {
-      setPreviewTime((prev) => {
-        const next = prev + 0.05;
-        return next > asset.metadata!.duration ? 0 : next;
-      });
-    }, 50);
-    return () => window.clearInterval(interval);
-  }, [asset]);
-
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90 p-8">
       <div className="bg-[#0f0f1a] border border-slate-700 w-full max-w-6xl rounded-2xl p-6 space-y-4 max-h-[92vh] overflow-y-auto custom-scrollbar">
