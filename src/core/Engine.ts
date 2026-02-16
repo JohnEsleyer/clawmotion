@@ -22,6 +22,7 @@ export interface ClawConfig {
         chromatic?: number;
         vignette?: number;
     };
+    concurrency?: number; // Number of parallel rendering workers
 }
 
 export interface Transition {

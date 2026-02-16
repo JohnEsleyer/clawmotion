@@ -28,6 +28,7 @@ const RectBlueprint = (ctx: BlueprintContext) => {
         height: 720,
         fps: 30,
         duration: 5, // seconds
+        concurrency: 4 // Render in 4 parallel chunks
     };
 
     const engine = new ClawEngine(config);

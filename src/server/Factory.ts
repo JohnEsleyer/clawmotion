@@ -75,20 +75,60 @@ export class MotionFactory {
     }
 
     /**
-     * Render the video to a file.
+     * Render the video to a file, supporting parallel chunks.
      */
     public async render(config: ClawConfig, clips: Clip[], outputPath: string, audioData?: any, images?: Record<string, string>, onTick?: (tick: number) => void) {
         await this.startServer();
 
-        // Launch Browser
-        const response = await this.bridge.launch(`http://127.0.0.1:${this.port}`, config.width, config.height);
-        if (!response?.ok()) {
-            throw new Error(`[Factory] Navigation failed: ${response?.status()} ${response?.statusText()}`);
-        }
-        console.log('[Factory] Puppeteer connected.');
+        const concurrency = config.concurrency || 1;
+        const totalTicks = config.duration * config.fps;
+        const chunkSize = Math.ceil(totalTicks / concurrency);
+        const tempDir = path.join(process.cwd(), '.claw-temp');
 
-        // Initialize Player in Browser
-        const page = this.bridge['page'] as any;
+        if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir);
+
+        const chunkFiles: string[] = [];
+        const workers: Promise<void>[] = [];
+
+        console.log(`[Factory] Starting parallel render with ${concurrency} workers...`);
+
+        for (let i = 0; i < concurrency; i++) {
+            const startTick = i * chunkSize;
+            const endTick = Math.min((i + 1) * chunkSize, totalTicks);
+
+            if (startTick >= totalTicks) break;
+
+            const chunkId = `chunk-${i}`;
+            const chunkPath = path.join(tempDir, `${chunkId}.mp4`);
+            chunkFiles.push(chunkPath);
+
+            workers.push(this.renderChunk(config, clips, chunkPath, startTick, endTick, audioData, images, onTick));
+        }
+
+        try {
+            await Promise.all(workers);
+            console.log('[Factory] All chunks rendered. Stitching...');
+
+            await this.stitchChunks(chunkFiles, outputPath, config.debug);
+            console.log('[Factory] Stitching complete.');
+        } finally {
+            // Cleanup chunks
+            chunkFiles.forEach(f => {
+                if (fs.existsSync(f)) fs.unlinkSync(f);
+            });
+            if (fs.existsSync(tempDir)) {
+                const files = fs.readdirSync(tempDir);
+                if (files.length === 0) fs.rmdirSync(tempDir);
+            }
+            this.server?.close();
+        }
+    }
+
+    private async renderChunk(config: ClawConfig, clips: Clip[], chunkPath: string, startTick: number, endTick: number, audioData?: any, images?: Record<string, string>, onTick?: (tick: number) => void) {
+        const bridge = new PuppeteerBridge();
+        await bridge.launch(`http://127.0.0.1:${this.port}`, config.width, config.height);
+
+        const page = (bridge as any).page;
         await page.evaluate(async (conf: any, clipList: any, audio: any, imageMap: any, camAnims: any) => {
             // @ts-ignore
             if (!window.ClawEngine) throw new Error("ClawEngine not found on window");
@@ -97,7 +137,6 @@ export class MotionFactory {
             // @ts-ignore
             const loader = new window.AssetLoader();
 
-            // 1. Load Images
             if (imageMap) {
                 for (const [id, url] of Object.entries(imageMap)) {
                     const img = await loader.loadImage(url);
@@ -105,14 +144,12 @@ export class MotionFactory {
                 }
             }
 
-            // 2. Inject audio data
             if (audio) {
                 Object.entries(audio).forEach(([id, frames]) => {
                     engine.setAudioData(id, frames as any[]);
                 });
             }
 
-            // 3. Register Blueprints
             // @ts-ignore
             if (window.PredefinedBlueprints) {
                 // @ts-ignore
@@ -122,11 +159,7 @@ export class MotionFactory {
             }
 
             clipList.forEach((c: any) => engine.addClip(c));
-
-            // Inject Camera Animations
-            if (camAnims) {
-                engine.cameraAnimations = camAnims;
-            }
+            if (camAnims) engine.cameraAnimations = camAnims;
 
             // @ts-ignore
             const player = new window.ClawPlayer('#preview', engine);
@@ -134,61 +167,62 @@ export class MotionFactory {
             window.player = player;
         }, config, clips, audioData, images, (config as any).cameraAnimations);
 
-        // Setup FFmpeg
-        const fps = config.fps;
-        const durationTicks = Math.floor(config.duration * fps);
+        // Setup FFmpeg for this chunk
         const passThrough = new (await import('stream')).PassThrough();
-
         const ffmpegCommand = ffmpeg(passThrough)
-            .inputFPS(fps)
+            .inputFPS(config.fps)
             .inputOptions(['-f image2pipe', '-c:v mjpeg'])
             .outputOptions([
                 '-c:v libx264',
                 '-pix_fmt yuv420p',
-                '-preset ultrafast'
+                '-preset ultrafast',
+                '-crf 18' // High quality for intermediate chunks
             ])
-            .on('start', (cmd) => console.log('[Factory] FFmpeg started:', cmd))
-            .on('stderr', (data: string) => {
-                if (config.debug) console.log('FFmpeg stderr:', data);
-            })
-            .on('error', (err: any) => {
-                console.error('[Factory] FFmpeg error:', err);
-            })
-            .on('end', () => {
-                console.log('[Factory] Rendering finished.');
-            })
-            .save(outputPath);
+            .save(chunkPath);
 
-        const totalTicks = config.duration * fps;
-        console.log(`Starting render: ${totalTicks} frames...`);
-
-        for (let tick = 0; tick < totalTicks; tick++) {
-            // Apply dynamic state if onTick is provided
-            if (onTick) {
-                onTick(tick);
-            }
-
-            // We pass the current config as state to sync dynamic changes
-            await this.bridge.seekToTick(tick, {
+        for (let tick = startTick; tick < endTick; tick++) {
+            await bridge.seekToTick(tick, {
                 camera: config.camera,
                 effects: config.effects
             });
-            const frame = await this.bridge.captureFrame();
+            const frame = await bridge.captureFrame();
             passThrough.write(frame);
-
-            if (tick % 30 === 0) console.log(`Rendered frame ${tick}/${durationTicks}`);
+            if (onTick) onTick(tick);
         }
 
         passThrough.end();
 
-        // Wait for FFmpeg to finish by listening to the command events
         await new Promise<void>((resolve, reject) => {
             (ffmpegCommand as any).on('end', () => resolve());
             (ffmpegCommand as any).on('error', (err: any) => reject(err));
         });
 
-        // Cleanup
-        await this.bridge.close();
-        this.server?.close();
+        await bridge.close();
+    }
+
+    private async stitchChunks(chunkFiles: string[], outputPath: string, debug?: boolean) {
+        return new Promise<void>((resolve, reject) => {
+            const command = ffmpeg();
+
+            // Create a temporary file list for FFmpeg concat demuxer
+            const listPath = path.join(process.cwd(), '.claw-temp', 'list.txt');
+            const listContent = chunkFiles.map(f => `file '${path.resolve(f)}'`).join('\n');
+            fs.writeFileSync(listPath, listContent);
+
+            ffmpeg()
+                .input(listPath)
+                .inputOptions(['-f concat', '-safe 0'])
+                .outputOptions(['-c copy']) // Use stream copy for speed and no generational loss
+                .on('start', (cmd) => debug && console.log('[Factory] FFmpeg Concatenate:', cmd))
+                .on('error', (err) => {
+                    if (fs.existsSync(listPath)) fs.unlinkSync(listPath);
+                    reject(err);
+                })
+                .on('end', () => {
+                    if (fs.existsSync(listPath)) fs.unlinkSync(listPath);
+                    resolve();
+                })
+                .save(outputPath);
+        });
     }
 }
