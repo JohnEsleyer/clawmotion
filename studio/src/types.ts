@@ -59,8 +59,19 @@ export interface Project {
     assets: Asset[];
 }
 
+export type ChatRole = 'user' | 'assistant' | 'system';
+
 export interface ChatMessage {
-    role: 'user' | 'assistant';
+    role: ChatRole;
     content: string;
     timestamp: number;
+    status?: 'pending' | 'done' | 'error';
+}
+
+export type LLMProvider = 'puter' | 'openai' | 'anthropic' | 'gemini';
+
+export interface LLMConfig {
+    provider: LLMProvider;
+    model: string;
+    apiKey?: string;
 }

@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Play, Pause, Plus, Trash2, Download, Code, FileJson, Edit2, X,
   RefreshCw, ZoomIn, ZoomOut, Copy, GripVertical, GripHorizontal, Sparkles, FolderOpen,
-  Image as ImageIcon, Music, Video, CircleHelp
+  Image as ImageIcon, Music, Video, CircleHelp, LoaderCircle, WandSparkles
 } from 'lucide-react';
 import Editor from 'react-simple-code-editor';
 import Prism from 'prismjs';
@@ -13,8 +13,9 @@ if (typeof window !== 'undefined') {
 import 'prismjs/components/prism-typescript';
 
 import { StudioEngine, analyzeAudioFile, detectBeats, generateAudioSummary } from './services/engine';
-import { generateClawCode, PUTER_MODELS } from './services/geminiService';
-import { ChatMessage, Asset, FileEntry, AudioMetadata, AudioAnalysisSettings, AudioSection, TimelineSegment } from './types';
+import { DEFAULT_LLM_CONFIG, PROVIDER_MODELS, generateClawCode } from './services/geminiService';
+import { formatTypeScript } from './services/formatter';
+import { ChatMessage, Asset, FileEntry, AudioMetadata, AudioAnalysisSettings, AudioSection, TimelineSegment, LLMConfig, LLMProvider } from './types';
 import { FULL_COMPREHENSIVE_GUIDE } from './constants';
 
 const SCREEN_SIZES = [
@@ -69,6 +70,12 @@ const AudioAnalysisModal: React.FC<{
   const [settings, setSettings] = useState<AudioAnalysisSettings>(asset.metadata.settings);
   const [beats, setBeats] = useState<number[]>(asset.metadata.beats);
   const [sections, setSections] = useState<AudioSection[]>(asset.metadata.sections || []);
+  const [previewTime, setPreviewTime] = useState(0);
+
+  useEffect(() => {
+    setSettings(asset.metadata!.settings);
+    setSections(asset.metadata!.sections || []);
+  }, [asset]);
 
   useEffect(() => {
     if (asset.metadata?.energies) {
@@ -76,31 +83,128 @@ const AudioAnalysisModal: React.FC<{
     }
   }, [asset, settings]);
 
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      setPreviewTime((prev) => {
+        const next = prev + 0.05;
+        return next > asset.metadata!.duration ? 0 : next;
+      });
+    }, 50);
+    return () => window.clearInterval(interval);
+  }, [asset]);
+
+  const previewPulse = beats.reduce((strength, beat) => {
+    const distance = Math.abs(beat - previewTime);
+    if (distance > 0.2) return strength;
+    return Math.max(strength, 1 - distance / 0.2);
+  }, 0);
+
+  const addSection = () => {
+    const start = sections.length === 0 ? 0 : sections[sections.length - 1].end;
+    const end = Math.min(asset.metadata!.duration, start + 2.5);
+    const color = SEGMENT_COLORS[sections.length % SEGMENT_COLORS.length];
+    setSections((prev) => ([...prev, { id: `sec-${Date.now()}`, label: `Section ${prev.length + 1}`, description: '', start, end, color }]));
+  };
+
+  const updateSection = (id: string, patch: Partial<AudioSection>) => {
+    setSections((prev) => prev.map((section) => section.id === id ? { ...section, ...patch } : section));
+  };
+
+  const removeSection = (id: string) => {
+    setSections((prev) => prev.filter((section) => section.id !== id));
+  };
+
+  const timelineDuration = Math.max(1, asset.metadata.duration);
+
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90 p-8">
-      <div className="bg-[#0f0f1a] border border-slate-700 w-full max-w-2xl rounded-2xl p-6 space-y-4">
+      <div className="bg-[#0f0f1a] border border-slate-700 w-full max-w-6xl rounded-2xl p-6 space-y-4 max-h-[92vh] overflow-hidden flex flex-col">
         <h2 className="text-lg font-bold">Audio Analysis: {asset.name}</h2>
+
         <div className="grid grid-cols-3 gap-3">
           <label className="text-xs">Threshold
-            <input type="number" step="0.05" value={settings.threshold} onChange={(e) => setSettings({ ...settings, threshold: Number(e.target.value) })} className="w-full mt-1 bg-slate-900 border border-slate-700 rounded p-2" />
+            <input type="range" min="1" max="2.2" step="0.01" value={settings.threshold} onChange={(e) => setSettings({ ...settings, threshold: Number(e.target.value) })} className="w-full mt-1" />
+            <div className="text-[10px] text-slate-400">{settings.threshold.toFixed(2)}</div>
           </label>
           <label className="text-xs">Min Interval
-            <input type="number" step="0.05" value={settings.minInterval} onChange={(e) => setSettings({ ...settings, minInterval: Number(e.target.value) })} className="w-full mt-1 bg-slate-900 border border-slate-700 rounded p-2" />
+            <input type="range" min="0.05" max="1" step="0.01" value={settings.minInterval} onChange={(e) => setSettings({ ...settings, minInterval: Number(e.target.value) })} className="w-full mt-1" />
+            <div className="text-[10px] text-slate-400">{settings.minInterval.toFixed(2)}s</div>
           </label>
           <label className="text-xs">Offset
-            <input type="number" step="0.05" value={settings.offset} onChange={(e) => setSettings({ ...settings, offset: Number(e.target.value) })} className="w-full mt-1 bg-slate-900 border border-slate-700 rounded p-2" />
+            <input type="range" min="-1" max="1" step="0.01" value={settings.offset} onChange={(e) => setSettings({ ...settings, offset: Number(e.target.value) })} className="w-full mt-1" />
+            <div className="text-[10px] text-slate-400">{settings.offset.toFixed(2)}s</div>
           </label>
         </div>
-        <div className="text-xs text-slate-400">Detected beats: {beats.length} · Sections: {sections.length}</div>
+
+        <div className="rounded border border-slate-700 bg-slate-950/40 p-3 space-y-2">
+          <div className="text-xs text-slate-400">Detected beats: {beats.length} · Sections: {sections.length}</div>
+          <div className="relative h-20 rounded bg-slate-900/60 overflow-hidden">
+            {beats.map((beat, idx) => (
+              <div key={`${beat}-${idx}`} className="absolute top-0 bottom-0 w-[2px] bg-cyan-300/70" style={{ left: `${(beat / timelineDuration) * 100}%` }} />
+            ))}
+            {sections.map((section) => (
+              <div key={section.id} className="absolute top-0 h-full opacity-25" style={{
+                left: `${(section.start / timelineDuration) * 100}%`,
+                width: `${((section.end - section.start) / timelineDuration) * 100}%`,
+                backgroundColor: section.color
+              }} />
+            ))}
+            <div className="absolute top-0 bottom-0 w-[3px] bg-white" style={{ left: `${(previewTime / timelineDuration) * 100}%` }} />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded bg-slate-900/70 border border-slate-800 p-3">
+              <div className="text-xs text-slate-400 mb-2">Beat timestamps (s)</div>
+              <div className="max-h-28 overflow-y-auto custom-scrollbar text-[11px] text-slate-200 font-mono leading-5">
+                {beats.length === 0 ? 'No beats detected.' : beats.map((beat, index) => (
+                  <span key={`${beat}-${index}`} className="inline-block mr-2">{beat.toFixed(2)}</span>
+                ))}
+              </div>
+            </div>
+            <div className="rounded bg-slate-900/70 border border-slate-800 p-3">
+              <div className="text-xs text-slate-400 mb-2">Beat dancer preview</div>
+              <div className="h-20 rounded border border-slate-700 bg-black/60 flex items-center justify-center">
+                <div className="w-8 h-8 rounded-full bg-pink-500 transition-transform duration-75" style={{ transform: `translateY(${Math.sin(previewTime * 6) * -6}px) scale(${1 + previewPulse * 0.5})` }} />
+              </div>
+              <div className="text-[10px] text-slate-500 mt-2">Preview time: {previewTime.toFixed(2)}s</div>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex-1 min-h-0 rounded border border-slate-700 bg-slate-950/40 p-3 flex flex-col">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-semibold">Segments</h3>
+            <button onClick={addSection} className="text-[11px] px-2 py-1 rounded bg-cyan-700">Add Segment</button>
+          </div>
+          <div className="space-y-2 overflow-y-auto custom-scrollbar">
+            {sections.length === 0 && <div className="text-xs text-slate-500">No segments yet. Add descriptive sections to help the LLM understand musical structure.</div>}
+            {sections.map((section) => (
+              <div key={section.id} className="rounded border border-slate-800 p-2 bg-slate-900/40">
+                <div className="grid grid-cols-12 gap-2 items-center">
+                  <input value={section.label} onChange={(e) => updateSection(section.id, { label: e.target.value })} className="col-span-3 bg-slate-950 border border-slate-700 rounded p-2 text-xs" placeholder="Title" />
+                  <input value={section.description || ''} onChange={(e) => updateSection(section.id, { description: e.target.value })} className="col-span-5 bg-slate-950 border border-slate-700 rounded p-2 text-xs" placeholder="Description" />
+                  <input type="number" step="0.1" value={section.start} onChange={(e) => updateSection(section.id, { start: Math.max(0, Number(e.target.value)) })} className="col-span-1 bg-slate-950 border border-slate-700 rounded p-2 text-xs" />
+                  <input type="number" step="0.1" value={section.end} onChange={(e) => updateSection(section.id, { end: Math.min(asset.metadata!.duration, Number(e.target.value)) })} className="col-span-1 bg-slate-950 border border-slate-700 rounded p-2 text-xs" />
+                  <input type="color" value={section.color} onChange={(e) => updateSection(section.id, { color: e.target.value })} className="col-span-1 h-8 w-full bg-transparent" />
+                  <button onClick={() => removeSection(section.id)} className="col-span-1 text-red-400 text-xs"><Trash2 className="w-4 h-4 mx-auto" /></button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
         <div className="flex justify-end gap-3">
           <button onClick={onClose} className="px-4 py-2 text-xs">Cancel</button>
           <button onClick={() => {
+            const normalizedSections = sections
+              .filter((section) => section.end > section.start)
+              .sort((a, b) => a.start - b.start);
             const metadata: AudioMetadata = {
               ...asset.metadata!,
               beats,
-              sections,
+              sections: normalizedSections,
               settings,
-              summary: generateAudioSummary(asset.metadata!.duration, beats, sections)
+              summary: generateAudioSummary(asset.metadata!.duration, beats, normalizedSections)
             };
             onSave(asset.id, metadata);
             onClose();
@@ -261,7 +365,9 @@ const App: React.FC = () => {
   const [isResizing, setIsResizing] = useState<'left' | 'right' | 'bottom' | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([{ role: 'assistant', content: 'Welcome to ClawStudio. Describe what you want to build.', timestamp: Date.now() }]);
   const [chatInput, setChatInput] = useState('');
-  const [selectedModel, setSelectedModel] = useState<(typeof PUTER_MODELS)[number]>(PUTER_MODELS[0]);
+  const [llmConfig, setLlmConfig] = useState<LLMConfig>(DEFAULT_LLM_CONFIG);
+  const [isSendingMessage, setIsSendingMessage] = useState(false);
+  const [autoFormatEnabled, setAutoFormatEnabled] = useState(true);
   const [activeTab, setActiveTab] = useState<'helper' | 'code'>('helper');
   const [leftTab, setLeftTab] = useState<'explorer' | 'assets'>('explorer');
   const [error, setError] = useState<string | null>(null);
@@ -282,8 +388,29 @@ const App: React.FC = () => {
   const assetInputRef = useRef<HTMLInputElement>(null);
   const studioEngineRef = useRef<StudioEngine | null>(null);
 
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem('clawstudio.llm.config');
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as LLMConfig;
+      if (!parsed.provider || !parsed.model) return;
+      setLlmConfig(parsed);
+    } catch {
+      // ignore invalid persisted config
+    }
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem('clawstudio.llm.config', JSON.stringify(llmConfig));
+  }, [llmConfig]);
+
   const activeFile = files.find((f) => f.id === activeFileId) || files[0];
   const selectedSegment = segments.find((s) => s.id === selectedSegmentId) || null;
+
+  const updateFileCode = (targetFileId: string, code: string) => {
+    const nextCode = autoFormatEnabled ? formatTypeScript(code) : code;
+    setFiles((prev) => prev.map((file) => file.id === targetFileId ? { ...file, code: nextCode } : file));
+  };
 
   const fileRename = (id: string, name: string) => {
     setFiles((prev) => prev.map((f) => (f.id === id ? { ...f, name } : f)));
@@ -544,16 +671,75 @@ const App: React.FC = () => {
     return `# Studio Context\n\n${FULL_COMPREHENSIVE_GUIDE}\n\n## Timeline Segments\n${segmentSummary}\n\n## Active Clips\n${clipSummaries || 'none'}\n\n## Files\n${files.map((f) => `- ${f.name} (${f.type})`).join('\n')}\n\n## Imported Assets (full context to use in generation)\n${assets.map((a) => `- ${a.name} [${a.id}] (${a.type}) url=${a.url} ${a.metadata ? `[${a.metadata.summary}]` : ''}`).join('\n') || 'none'}\n\n## Current File (${activeFile.name})\n\n\`\`\`typescript\n${activeFile.code}\n\`\`\``;
   };
 
+  const applyAssistantCommands = (raw: string) => {
+    const commands = [...raw.matchAll(/CMD:\s*(setDuration|setSize)\(([^\n)]+)\)/g)];
+    commands.forEach((match) => {
+      if (match[1] === 'setDuration') {
+        const value = Number(match[2].replace(/[^0-9.\-]/g, ''));
+        if (Number.isFinite(value) && value > 0) {
+          setDuration(value);
+        }
+      }
+      if (match[1] === 'setSize') {
+        const size = match[2].replace(/["'\s]/g, '');
+        const found = SCREEN_SIZES.find((item) => item.id === size);
+        if (found) setSelectedSize(found);
+      }
+    });
+
+    const fileBlocks = [...raw.matchAll(/File:\s*([^\n]+)\n```(?:typescript|ts|tsx)?\n([\s\S]*?)```/g)];
+    for (const block of fileBlocks) {
+      const fileName = block[1].trim();
+      const rawCode = block[2].trim();
+      const code = autoFormatEnabled ? formatTypeScript(rawCode) : rawCode;
+      setFiles((prev) => {
+        const existing = prev.find((file) => file.name === fileName);
+        if (existing) {
+          return prev.map((file) => file.id === existing.id ? { ...file, code } : file);
+        }
+        const type = fileName.endsWith('.claw') ? 'clip' : 'orchestrator';
+        return [...prev, { id: `file-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, name: fileName, code, type }];
+      });
+    }
+  };
+
   const handleSendMessage = async () => {
-    if (!chatInput.trim()) return;
-    setMessages((prev) => [...prev, { role: 'user', content: chatInput, timestamp: Date.now() }]);
-    const prompt = `${chatInput}\n\n${buildFullContext()}`;
+    if (!chatInput.trim() || isSendingMessage) return;
+    const userMessage = chatInput;
+    setMessages((prev) => [...prev, { role: 'user', content: userMessage, timestamp: Date.now(), status: 'done' }]);
     setChatInput('');
+    setIsSendingMessage(true);
+
+    const prompt = `${userMessage}\n\n${buildFullContext()}`;
+    setMessages((prev) => [...prev, { role: 'assistant', content: 'Thinking...', timestamp: Date.now(), status: 'pending' }]);
+
     try {
-      const result = await generateClawCode(prompt, files, assets, selectedModel);
-      setMessages((prev) => [...prev, { role: 'assistant', content: result, timestamp: Date.now() }]);
-    } catch {
-      setMessages((prev) => [...prev, { role: 'assistant', content: 'Failed to process request.', timestamp: Date.now() }]);
+      const result = await generateClawCode(prompt, files, assets, llmConfig);
+      applyAssistantCommands(result);
+      setMessages((prev) => {
+        const copy = [...prev];
+        const pendingIndex = [...copy].reverse().findIndex((msg) => msg.role === 'assistant' && msg.status === 'pending');
+        if (pendingIndex >= 0) {
+          const realIndex = copy.length - 1 - pendingIndex;
+          copy[realIndex] = { role: 'assistant', content: result, timestamp: Date.now(), status: 'done' };
+          return copy;
+        }
+        return [...copy, { role: 'assistant', content: result, timestamp: Date.now(), status: 'done' }];
+      });
+    } catch (err) {
+      const content = err instanceof Error ? err.message : 'Failed to process request.';
+      setMessages((prev) => {
+        const copy = [...prev];
+        const pendingIndex = [...copy].reverse().findIndex((msg) => msg.role === 'assistant' && msg.status === 'pending');
+        if (pendingIndex >= 0) {
+          const realIndex = copy.length - 1 - pendingIndex;
+          copy[realIndex] = { role: 'assistant', content, timestamp: Date.now(), status: 'error' };
+          return copy;
+        }
+        return [...copy, { role: 'assistant', content, timestamp: Date.now(), status: 'error' }];
+      });
+    } finally {
+      setIsSendingMessage(false);
     }
   };
 
@@ -824,27 +1010,61 @@ const App: React.FC = () => {
                 </div>
                 <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
                   {messages.map((m, i) => (
-                    <div key={i} className={`p-2 text-xs rounded-xl whitespace-pre-wrap ${m.role === 'user' ? 'bg-red-600 ml-10' : 'bg-slate-800/60 mr-10 border border-slate-700'}`}>{m.content}</div>
+                    <div key={i} className={`p-2 text-xs rounded-xl whitespace-pre-wrap ${m.role === 'user' ? 'bg-red-600 ml-10' : 'bg-slate-800/60 mr-10 border border-slate-700'}`}>
+                      {m.status === 'pending' && <LoaderCircle className="w-3 h-3 inline mr-1 animate-spin text-cyan-300" />}
+                      {m.content}
+                    </div>
                   ))}
                 </div>
                 <div className="p-3 border-t border-slate-800 space-y-2">
-                  <select value={selectedModel} onChange={(e) => setSelectedModel(e.target.value as (typeof PUTER_MODELS)[number])} className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-xs">
-                    {PUTER_MODELS.map((model) => <option key={model} value={model}>{model}</option>)}
+                  <select value={llmConfig.provider} onChange={(e) => {
+                    const provider = e.target.value as LLMProvider;
+                    setLlmConfig((prev) => ({ ...prev, provider, model: PROVIDER_MODELS[provider][0] }));
+                  }} className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-xs">
+                    <option value="puter">Puter (built in)</option>
+                    <option value="openai">OpenAI</option>
+                    <option value="anthropic">Anthropic (Claude)</option>
+                    <option value="gemini">Google Gemini</option>
                   </select>
+
+                  <select value={llmConfig.model} onChange={(e) => setLlmConfig((prev) => ({ ...prev, model: e.target.value }))} className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-xs">
+                    {PROVIDER_MODELS[llmConfig.provider].map((model) => <option key={model} value={model}>{model}</option>)}
+                  </select>
+
+                  {llmConfig.provider !== 'puter' && (
+                    <input
+                      type="password"
+                      value={llmConfig.apiKey || ''}
+                      onChange={(e) => setLlmConfig((prev) => ({ ...prev, apiKey: e.target.value }))}
+                      className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-xs"
+                      placeholder={`Enter ${llmConfig.provider} API key (stored locally)`}
+                    />
+                  )}
+
                   <textarea value={chatInput} onChange={(e) => setChatInput(e.target.value)} className="w-full h-20 bg-slate-900 border border-slate-700 rounded p-2 text-xs" placeholder="Ask the assistant to edit files, timeline, and segments..." />
-                  <button onClick={handleSendMessage} className="w-full rounded bg-red-600 py-2 text-xs">Send</button>
+                  <button onClick={handleSendMessage} disabled={isSendingMessage} className="w-full rounded bg-red-600 py-2 text-xs disabled:opacity-60 flex items-center justify-center gap-2">
+                    {isSendingMessage ? <LoaderCircle className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                    {isSendingMessage ? 'Generating...' : 'Send'}
+                  </button>
                 </div>
               </div>
             ) : (
               <div className="h-full flex flex-col">
-                <div className="px-3 py-2 border-b border-slate-800 text-[10px] uppercase text-slate-500 flex items-center justify-between">
+                <div className="px-3 py-2 border-b border-slate-800 text-[10px] uppercase text-slate-500 flex items-center justify-between gap-2">
                   <span>{activeFile.name}</span>
-                  <span className="text-slate-600">{activeFile.type}</span>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => updateFileCode(activeFileId, activeFile.code)} className="normal-case text-[10px] px-2 py-1 rounded bg-slate-800 text-slate-300 flex items-center gap-1"><WandSparkles className="w-3 h-3" /> Format</button>
+                    <label className="normal-case text-[10px] text-slate-400 flex items-center gap-1">
+                      <input type="checkbox" checked={autoFormatEnabled} onChange={(e) => setAutoFormatEnabled(e.target.checked)} />
+                      Auto-format
+                    </label>
+                    <span className="text-slate-600">{activeFile.type}</span>
+                  </div>
                 </div>
                 <div className="flex-1 overflow-auto">
                   <Editor
                     value={activeFile.code}
-                    onValueChange={(code) => setFiles((prev) => prev.map((f) => f.id === activeFileId ? { ...f, code } : f))}
+                    onValueChange={(code) => updateFileCode(activeFileId, code)}
                     highlight={(code) => Prism.highlight(code, Prism.languages.typescript, 'typescript')}
                     padding={14}
                     style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: 12, minHeight: '100%' }}
