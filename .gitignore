@@ -1,0 +1,8 @@
+node_modules
+dist
+*.mp4
+*.png
+.DS_Store
+debug.log
+test.wav
+temp_*.wav
