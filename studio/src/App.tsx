@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
-  Play, Pause, Plus, Trash2, FolderOpen, Download, Code, FileJson, Edit2, Check, X,
-  RefreshCw, ZoomIn, ZoomOut, Copy, GripVertical, GripHorizontal, Sparkles
+  Play, Pause, Plus, Trash2, Download, Code, FileJson, Edit2, X,
+  RefreshCw, ZoomIn, ZoomOut, Copy, GripVertical, GripHorizontal, Sparkles, FolderOpen,
+  Image as ImageIcon, Music, Video
 } from 'lucide-react';
 import Editor from 'react-simple-code-editor';
 import Prism from 'prismjs';
@@ -87,37 +88,56 @@ const AudioAnalysisModal: React.FC<{
   );
 };
 
-const AssetModal: React.FC<{
-  isOpen: boolean;
-  assets: Asset[];
+const SegmentModal: React.FC<{
+  segment: TimelineSegment | null;
+  duration: number;
   onClose: () => void;
-  onImport: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  onAnalyze: (asset: Asset) => void;
+  onSave: (segment: TimelineSegment) => void;
   onDelete: (id: string) => void;
-}> = ({ isOpen, assets, onClose, onImport, onAnalyze, onDelete }) => {
-  const inputRef = useRef<HTMLInputElement>(null);
-  if (!isOpen) return null;
+}> = ({ segment, duration, onClose, onSave, onDelete }) => {
+  if (!segment) return null;
+
   return (
-    <div className="fixed inset-0 z-[150] bg-black/90 p-8 flex items-center justify-center">
-      <div className="bg-[#0f0f1a] border border-slate-700 rounded-2xl w-full max-w-4xl h-[80vh] flex flex-col overflow-hidden">
-        <div className="p-4 border-b border-slate-800 flex items-center justify-between">
-          <h3 className="font-bold">Asset Library</h3>
-          <div className="flex gap-2">
-            <label className="px-3 py-2 text-xs rounded bg-red-600 cursor-pointer">Upload<input ref={inputRef} type="file" multiple className="hidden" accept="image/*,video/*,audio/*" onChange={onImport} /></label>
-            <button onClick={onClose}><X className="w-4 h-4" /></button>
+    <div className="fixed inset-0 z-[190] bg-black/80 p-8 flex items-center justify-center">
+      <div className="bg-[#0f0f1a] border border-slate-700 rounded-2xl w-full max-w-2xl p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-bold">Edit Segment</h3>
+          <button onClick={onClose}><X className="w-4 h-4" /></button>
+        </div>
+        <div className="space-y-3">
+          <input value={segment.name} onChange={(e) => onSave({ ...segment, name: e.target.value })} className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-sm" />
+          <textarea value={segment.description} onChange={(e) => onSave({ ...segment, description: e.target.value })} className="w-full h-40 bg-slate-900 border border-slate-700 rounded p-2 text-sm" />
+          <div className="grid grid-cols-2 gap-3">
+            <label className="text-xs">Start
+              <input type="number" step="0.1" value={segment.start} onChange={(e) => onSave({ ...segment, start: Math.max(0, Number(e.target.value)) })} className="w-full mt-1 bg-slate-900 border border-slate-700 rounded p-2" />
+            </label>
+            <label className="text-xs">End
+              <input type="number" step="0.1" value={segment.end} onChange={(e) => onSave({ ...segment, end: Math.min(duration, Number(e.target.value)) })} className="w-full mt-1 bg-slate-900 border border-slate-700 rounded p-2" />
+            </label>
           </div>
         </div>
-        <div className="p-4 overflow-y-auto grid grid-cols-2 md:grid-cols-4 gap-3">
-          {assets.map((a) => (
-            <div key={a.id} className="bg-slate-900 border border-slate-800 rounded p-2 text-xs">
-              <div className="truncate mb-2">{a.name}</div>
-              <div className="text-slate-400 mb-2">{a.type}</div>
-              <div className="flex gap-1">
-                {a.type === 'audio' && <button onClick={() => onAnalyze(a)} className="px-2 py-1 rounded bg-emerald-700">Analyze</button>}
-                <button onClick={() => onDelete(a.id)} className="px-2 py-1 rounded bg-red-700">Delete</button>
-              </div>
-            </div>
-          ))}
+        <div className="flex justify-between pt-2">
+          <button onClick={() => { onDelete(segment.id); onClose(); }} className="px-4 py-2 rounded bg-red-700 text-xs">Delete</button>
+          <button onClick={onClose} className="px-4 py-2 rounded bg-slate-800 text-xs">Done</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const ExportProgressModal: React.FC<{ isOpen: boolean; progress: number; done: boolean; onClose: () => void; }> = ({ isOpen, progress, done, onClose }) => {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 z-[220] bg-black/85 p-8 flex items-center justify-center">
+      <div className="bg-[#0f0f1a] border border-slate-700 rounded-2xl w-full max-w-xl p-6 space-y-4">
+        <h3 className="font-bold">Server Rendering Export</h3>
+        <p className="text-xs text-slate-400">Preparing and rendering your timeline on the server.</p>
+        <div className="h-3 bg-slate-900 rounded-full overflow-hidden border border-slate-800">
+          <div className="h-full bg-red-500 transition-all" style={{ width: `${progress}%` }} />
+        </div>
+        <div className="text-xs font-mono text-right">{progress}%</div>
+        <div className="flex justify-end">
+          <button onClick={onClose} disabled={!done} className="px-4 py-2 text-xs rounded bg-red-600 disabled:opacity-40">{done ? 'Close' : 'Rendering...'}</button>
         </div>
       </div>
     </div>
@@ -148,70 +168,13 @@ claw.addClip({
   startTick: claw.toTicks(2),
   durationTicks: claw.toTicks(8),
   layer: 10,
-  props: { title: 'Build beautiful motion with ClawMotion', subtitle: 'Programmatic and deterministic' },
+  props: { title: 'Build beautiful motion with ClawMotion', subtitle: 'Studio' },
   entry: { type: 'slide', durationTicks: claw.toTicks(1) },
-  exit: { type: 'fade', durationTicks: claw.toTicks(1) }
-});
-
-claw.addClip({
-  id: 'particles',
-  blueprintId: 'particle-field.claw',
-  startTick: claw.toTicks(4),
-  durationTicks: claw.toTicks(8),
-  layer: 4,
-  entry: { type: 'fade', durationTicks: claw.toTicks(1) },
   exit: { type: 'fade', durationTicks: claw.toTicks(1) }
 });`
   },
-  {
-    id: 'gradient-showcase',
-    name: 'gradient-showcase.claw',
-    type: 'clip',
-    code: `(ctx) => {
-  const { ctx: c, width, height, localTime, props } = ctx;
-  const palette = props.palette || ['#0b1020', '#312e81', '#db2777'];
-  const g = c.createLinearGradient(0, 0, width, height);
-  g.addColorStop(0, palette[0]);
-  g.addColorStop(0.5 + Math.sin(localTime * Math.PI) * 0.2, palette[1]);
-  g.addColorStop(1, palette[2]);
-  c.fillStyle = g;
-  c.fillRect(0, 0, width, height);
-}`
-  },
-  {
-    id: 'hero-title',
-    name: 'hero-title.claw',
-    type: 'clip',
-    code: `(ctx) => {
-  const { ctx: c, width, height, localTime, props } = ctx;
-  const y = height * 0.52 - Math.sin(localTime * Math.PI) * 18;
-  c.fillStyle = 'rgba(255,255,255,0.95)';
-  c.font = '700 56px Inter, sans-serif';
-  c.textAlign = 'center';
-  c.fillText(props.title || 'ClawMotion', width / 2, y);
-  c.fillStyle = 'rgba(255,255,255,0.7)';
-  c.font = '500 24px Inter, sans-serif';
-  c.fillText(props.subtitle || 'Studio', width / 2, y + 46);
-}`
-  },
-  {
-    id: 'particles',
-    name: 'particle-field.claw',
-    type: 'clip',
-    code: `(ctx) => {
-  const { ctx: c, width, height, localTime, utils } = ctx;
-  for (let i = 0; i < 70; i++) {
-    const x = (i * 137.7) % width;
-    const drift = Math.sin(localTime * Math.PI * 2 + i * 0.2) * 80;
-    const y = ((i * 91.5) % height + drift + height) % height;
-    const r = 1 + ((i * 17) % 5);
-    c.fillStyle = 'rgba(255,255,255,' + (0.05 + (i % 10) * 0.015) + ')';
-    c.beginPath();
-    c.arc(x, y, r, 0, Math.PI * 2);
-    c.fill();
-  }
-}`
-  }
+  { id: 'gradient-showcase', name: 'gradient-showcase.claw', type: 'clip', code: `(ctx) => { const { ctx: c, width, height } = ctx; const g = c.createLinearGradient(0, 0, width, height); g.addColorStop(0, '#0b1020'); g.addColorStop(1, '#ec4899'); c.fillStyle = g; c.fillRect(0, 0, width, height); }` },
+  { id: 'hero-title', name: 'hero-title.claw', type: 'clip', code: `(ctx) => { const { ctx: c, width, height } = ctx; c.fillStyle = 'white'; c.font = '700 56px Inter'; c.textAlign = 'center'; c.fillText('ClawMotion Studio', width / 2, height / 2); }` }
 ]);
 
 const App: React.FC = () => {
@@ -220,13 +183,12 @@ const App: React.FC = () => {
   const [files, setFiles] = useState<FileEntry[]>(buildDefaultFiles());
   const [activeFileId, setActiveFileId] = useState('orch');
   const [assets, setAssets] = useState<Asset[]>([]);
-  const [showAssetModal, setShowAssetModal] = useState(false);
   const [showAnalysisModal, setShowAnalysisModal] = useState(false);
   const [analyzingAsset, setAnalyzingAsset] = useState<Asset | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [timelineScale, setTimelineScale] = useState(1);
-  const [leftPanelWidth, setLeftPanelWidth] = useState(260);
+  const [leftPanelWidth, setLeftPanelWidth] = useState(300);
   const [rightPanelWidth, setRightPanelWidth] = useState(430);
   const [bottomPanelHeight, setBottomPanelHeight] = useState(250);
   const [isResizing, setIsResizing] = useState<'left' | 'right' | 'bottom' | null>(null);
@@ -234,19 +196,24 @@ const App: React.FC = () => {
   const [chatInput, setChatInput] = useState('');
   const [selectedModel, setSelectedModel] = useState<(typeof PUTER_MODELS)[number]>(PUTER_MODELS[0]);
   const [activeTab, setActiveTab] = useState<'helper' | 'code'>('helper');
+  const [leftTab, setLeftTab] = useState<'explorer' | 'assets'>('explorer');
   const [error, setError] = useState<string | null>(null);
   const [segments, setSegments] = useState<TimelineSegment[]>([
     { id: 'seg-1', name: 'Hook', description: 'Grab attention with color and motion.', start: 0, end: 4, color: SEGMENT_COLORS[0] },
     { id: 'seg-2', name: 'Message', description: 'Reveal core statement and tone.', start: 4, end: 8, color: SEGMENT_COLORS[2] },
     { id: 'seg-3', name: 'Finish', description: 'Polished outro with easing.', start: 8, end: 12, color: SEGMENT_COLORS[4] }
   ]);
-  const [selectedSegmentId, setSelectedSegmentId] = useState<string>('seg-1');
+  const [selectedSegmentId, setSelectedSegmentId] = useState<string>('');
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportProgress, setExportProgress] = useState(0);
 
   const playerContainerRef = useRef<HTMLDivElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
+  const assetInputRef = useRef<HTMLInputElement>(null);
   const studioEngineRef = useRef<StudioEngine | null>(null);
 
   const activeFile = files.find((f) => f.id === activeFileId) || files[0];
+  const selectedSegment = segments.find((s) => s.id === selectedSegmentId) || null;
 
   const fileRename = (id: string, name: string) => {
     setFiles((prev) => prev.map((f) => (f.id === id ? { ...f, name } : f)));
@@ -312,7 +279,7 @@ const App: React.FC = () => {
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
       if (!isResizing) return;
-      if (isResizing === 'left') setLeftPanelWidth(Math.max(180, Math.min(500, e.clientX)));
+      if (isResizing === 'left') setLeftPanelWidth(Math.max(220, Math.min(540, e.clientX)));
       if (isResizing === 'right') setRightPanelWidth(Math.max(300, Math.min(700, window.innerWidth - e.clientX)));
       if (isResizing === 'bottom') setBottomPanelHeight(Math.max(180, Math.min(500, window.innerHeight - e.clientY)));
     };
@@ -348,8 +315,6 @@ const App: React.FC = () => {
   };
 
   const clips = studioEngineRef.current?.getState().clips || [];
-
-  const selectedSegment = segments.find((s) => s.id === selectedSegmentId) || segments[0];
 
   const buildFullContext = () => {
     const clipSummaries = clips.map((c: any) => `${c.id || c.blueprintId}: ${c.blueprintId} [${(c.startTick / 30).toFixed(2)}s - ${((c.startTick + c.durationTicks) / 30).toFixed(2)}s]`).join('\n');
@@ -392,63 +357,123 @@ const App: React.FC = () => {
     e.target.value = '';
   };
 
+  const addSegment = () => {
+    const idx = segments.length % SEGMENT_COLORS.length;
+    const seg: TimelineSegment = {
+      id: `seg-${Date.now()}`,
+      name: `Segment ${segments.length + 1}`,
+      description: 'Describe desired flow for this segment.',
+      start: Math.max(0, currentTime),
+      end: Math.min(duration, currentTime + 2),
+      color: SEGMENT_COLORS[idx]
+    };
+    setSegments((prev) => [...prev, seg]);
+    setSelectedSegmentId(seg.id);
+  };
+
+  const handleExport = () => {
+    setShowExportModal(true);
+    setExportProgress(3);
+  };
+
+  useEffect(() => {
+    if (!showExportModal) return;
+    if (exportProgress >= 100) return;
+    const t = setTimeout(() => setExportProgress((prev) => Math.min(100, prev + Math.max(3, Math.round((100 - prev) * 0.18)))), 350);
+    return () => clearTimeout(t);
+  }, [showExportModal, exportProgress]);
+
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-[#0a0a0f] text-slate-200">
-      <header className="flex items-center justify-between px-4 py-2 bg-[#0f0f1a] border-b border-red-900/30 shrink-0 z-50">
+      <header className="flex items-center justify-between px-4 py-2 bg-[#0f0f1a] border-b border-red-900/30 shrink-0 z-50 gap-3">
         <div className="flex items-center gap-3">
           <ClawLogo />
-          <span className="font-bold text-white tracking-tighter text-lg">clawmotion studio</span>
+          <span className="font-bold tracking-tighter text-lg">clawmotion <span className="text-red-500">studio</span></span>
         </div>
-        <div className="flex items-center gap-2">
-          <button onClick={() => navigator.clipboard.writeText(buildFullContext())} className="px-3 py-1.5 text-xs rounded bg-slate-800"><Copy className="w-3 h-3 inline mr-1" />Copy Full Context</button>
-          <button onClick={() => setShowAssetModal(true)} className="px-3 py-1.5 text-xs rounded bg-slate-800"><FolderOpen className="w-3 h-3 inline mr-1" />Assets</button>
-          <button className="px-3 py-1.5 text-xs rounded bg-red-600"><Download className="w-3 h-3 inline mr-1" />Export</button>
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          <select value={selectedSize.id} onChange={(e) => setSelectedSize(SCREEN_SIZES.find((s) => s.id === e.target.value)!)} className="text-xs bg-slate-900 border border-slate-700 rounded px-2 py-1">
+            {SCREEN_SIZES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+          </select>
+          <label className="text-xs rounded px-2 py-1 border border-slate-700 bg-slate-900">Duration
+            <input type="number" value={duration} onChange={(e) => setDuration(Math.max(1, Number(e.target.value) || 1))} className="w-12 ml-2 bg-transparent outline-none" />
+          </label>
+          <button onClick={rebuildEngine} className="px-3 py-1.5 text-xs rounded bg-slate-800"><RefreshCw className="w-3 h-3 inline mr-1" />Rebuild</button>
+          <button onClick={() => navigator.clipboard.writeText(buildFullContext())} className="px-3 py-1.5 text-xs rounded bg-slate-800"><Copy className="w-3 h-3 inline mr-1" />Copy Context</button>
+          <button onClick={handleExport} className="px-3 py-1.5 text-xs rounded bg-red-600"><Download className="w-3 h-3 inline mr-1" />Export</button>
         </div>
       </header>
 
       <main className="flex-1 min-h-0 flex relative">
         <aside style={{ width: leftPanelWidth }} className="bg-[#0f0f1a] border-r border-slate-800/50 flex flex-col shrink-0">
-          <div className="p-3 border-b border-slate-800/50 flex items-center justify-between">
-            <h2 className="text-[10px] font-black uppercase tracking-widest text-slate-500">Explorer</h2>
-            <button onClick={createFile} className="p-1 hover:bg-slate-800 rounded text-red-400"><Plus className="w-4 h-4" /></button>
+          <div className="flex border-b border-slate-800/50">
+            <button onClick={() => setLeftTab('explorer')} className={`flex-1 py-2 text-[10px] uppercase font-black ${leftTab === 'explorer' ? 'text-red-400 border-b-2 border-red-500' : 'text-slate-500'}`}>Explorer</button>
+            <button onClick={() => setLeftTab('assets')} className={`flex-1 py-2 text-[10px] uppercase font-black ${leftTab === 'assets' ? 'text-red-400 border-b-2 border-red-500' : 'text-slate-500'}`}>Assets</button>
           </div>
-          <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
-            {files.map((f) => (
-              <div key={f.id} className={`group flex items-center gap-2 px-2 py-2 rounded ${activeFileId === f.id ? 'bg-red-900/20 ring-1 ring-red-500/30' : 'hover:bg-slate-800/40'}`}>
-                <button className="flex-1 flex items-center gap-2 min-w-0" onClick={() => { setActiveFileId(f.id); setActiveTab('code'); }}>
-                  {f.type === 'orchestrator' ? <FileJson className="w-4 h-4 text-amber-500" /> : <Code className="w-4 h-4 text-red-400" />}
-                  <span className="text-xs truncate">{f.name}</span>
-                </button>
-                <button onClick={() => {
-                  const name = prompt('Rename file', f.name);
-                  if (!name) return;
-                  fileRename(f.id, name);
-                }} className="opacity-0 group-hover:opacity-100"><Edit2 className="w-3 h-3" /></button>
-                {f.type !== 'orchestrator' && <button onClick={() => deleteFile(f.id)} className="opacity-0 group-hover:opacity-100 text-red-400"><Trash2 className="w-3 h-3" /></button>}
+
+          {leftTab === 'explorer' ? (
+            <>
+              <div className="p-3 border-b border-slate-800/50 flex items-center justify-between">
+                <h2 className="text-[10px] font-black uppercase tracking-widest text-slate-500">Files</h2>
+                <button onClick={createFile} className="p-1 hover:bg-slate-800 rounded text-red-400"><Plus className="w-4 h-4" /></button>
               </div>
-            ))}
-          </div>
+              <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
+                {files.map((f) => (
+                  <div key={f.id} className={`group flex items-center gap-2 px-2 py-2 rounded ${activeFileId === f.id ? 'bg-red-900/20 ring-1 ring-red-500/30' : 'hover:bg-slate-800/40'}`}>
+                    <button className="flex-1 flex items-center gap-2 min-w-0" onClick={() => { setActiveFileId(f.id); setActiveTab('code'); }}>
+                      {f.type === 'orchestrator' ? <FileJson className="w-4 h-4 text-amber-500" /> : <Code className="w-4 h-4 text-red-400" />}
+                      <span className="text-xs truncate">{f.name}</span>
+                    </button>
+                    <button onClick={() => {
+                      const name = prompt('Rename file', f.name);
+                      if (!name) return;
+                      fileRename(f.id, name);
+                    }} className="opacity-0 group-hover:opacity-100"><Edit2 className="w-3 h-3" /></button>
+                    {f.type !== 'orchestrator' && <button onClick={() => deleteFile(f.id)} className="opacity-0 group-hover:opacity-100 text-red-400"><Trash2 className="w-3 h-3" /></button>}
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="h-full flex flex-col min-h-0">
+              <div className="p-3 border-b border-slate-800/50 flex items-center justify-between">
+                <h2 className="text-[10px] font-black uppercase tracking-widest text-slate-500">Asset Library</h2>
+                <label className="px-2 py-1 text-xs rounded bg-red-600 cursor-pointer"><FolderOpen className="w-3 h-3 inline mr-1" />Upload
+                  <input ref={assetInputRef} type="file" multiple className="hidden" accept="image/*,video/*,audio/*" onChange={handleImportAssets} />
+                </label>
+              </div>
+              <div className="flex-1 overflow-y-auto p-2 space-y-2 custom-scrollbar">
+                {assets.length === 0 && <div className="text-xs text-slate-500 p-2">No assets imported yet.</div>}
+                {assets.map((a) => (
+                  <div key={a.id} className="rounded border border-slate-800 bg-slate-900/40 p-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="text-xs truncate">{a.name}</div>
+                        <div className="text-[10px] text-slate-400 flex items-center gap-1 mt-1">
+                          {a.type === 'image' && <ImageIcon className="w-3 h-3" />}
+                          {a.type === 'video' && <Video className="w-3 h-3" />}
+                          {a.type === 'audio' && <Music className="w-3 h-3" />}
+                          {a.type}
+                        </div>
+                      </div>
+                      <button onClick={() => setAssets((prev) => prev.filter((x) => x.id !== a.id))} className="text-red-400"><Trash2 className="w-3 h-3" /></button>
+                    </div>
+                    {a.type === 'audio' && <button onClick={() => { setAnalyzingAsset(a); setShowAnalysisModal(true); }} className="mt-2 w-full text-[10px] py-1 rounded bg-emerald-700">Analyze Audio</button>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </aside>
         <div className="w-1 cursor-col-resize bg-slate-900 hover:bg-red-500/60" onMouseDown={() => setIsResizing('left')}><GripVertical className="w-3 h-3 mx-auto mt-4 text-slate-500" /></div>
 
         <section className="flex-1 min-w-0 min-h-0 flex flex-col">
           <div className="flex-1 min-h-0 bg-[#050505] relative p-4">
-            <div className="absolute top-4 left-4 right-4 h-12 z-20 rounded-xl border border-slate-700/70 bg-black/60 backdrop-blur-md px-3 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <select value={selectedSize.id} onChange={(e) => setSelectedSize(SCREEN_SIZES.find((s) => s.id === e.target.value)!)} className="text-xs bg-transparent">
-                  {SCREEN_SIZES.map((s) => <option key={s.id} value={s.id} className="bg-slate-900">{s.label}</option>)}
-                </select>
-                <label className="text-xs">Duration
-                  <input type="number" value={duration} onChange={(e) => setDuration(Number(e.target.value) || 1)} className="w-12 ml-1 bg-transparent" />
-                </label>
+            <button onClick={togglePlay} className="w-full h-full border border-zinc-800 bg-black rounded-xl shadow-[0_0_50px_rgba(0,0,0,0.7)] flex items-center justify-center p-4">
+              <div className="relative w-full h-full flex items-center justify-center">
+                <div ref={playerContainerRef} className="relative border border-slate-800/40 bg-black rounded-lg overflow-hidden flex items-center justify-center max-w-full max-h-full" style={{ aspectRatio: `${selectedSize.width}/${selectedSize.height}`, width: '100%', height: '100%' }} />
+                {!isPlaying && <div className="absolute inset-0 flex items-center justify-center pointer-events-none"><div className="rounded-full bg-black/60 border border-slate-600 p-4"><Play className="w-8 h-8 text-red-400" /></div></div>}
               </div>
-              <div className="flex items-center gap-2">
-                <button onClick={togglePlay} className="px-2 py-1 text-xs rounded bg-red-600">{isPlaying ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}</button>
-                <button onClick={rebuildEngine} className="px-2 py-1 text-xs rounded bg-slate-800"><RefreshCw className="w-3 h-3" /></button>
-              </div>
-            </div>
-
-            <div ref={playerContainerRef} className="relative w-full h-full border border-zinc-800 bg-black rounded-xl shadow-[0_0_50px_rgba(0,0,0,0.7)]" style={{ aspectRatio: `${selectedSize.width}/${selectedSize.height}` }} />
+            </button>
             {error && <div className="absolute inset-0 flex items-center justify-center"><div className="bg-red-900/80 border border-red-500 p-4 rounded text-xs">{error}</div></div>}
           </div>
 
@@ -461,82 +486,55 @@ const App: React.FC = () => {
               <button onClick={() => setTimelineScale((z) => Math.max(0.5, z - 0.2))}><ZoomOut className="w-4 h-4" /></button>
               <span>{Math.round(timelineScale * 100)}%</span>
               <button onClick={() => setTimelineScale((z) => Math.min(8, z + 0.2))}><ZoomIn className="w-4 h-4" /></button>
+              <button onClick={addSegment} className="ml-2 px-2 py-1 rounded bg-slate-800 text-[10px]"><Plus className="w-3 h-3 inline mr-1" />Segment</button>
             </div>
-            <div className="flex-1 min-h-0 flex">
-              <div className="w-72 border-r border-slate-800 p-2 overflow-y-auto custom-scrollbar">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-[10px] uppercase font-black text-slate-500">Segments</h3>
-                  <button onClick={() => {
-                    const idx = segments.length % SEGMENT_COLORS.length;
-                    const seg: TimelineSegment = { id: `seg-${Date.now()}`, name: `Segment ${segments.length + 1}`, description: 'Describe desired flow for this segment.', start: Math.max(0, currentTime), end: Math.min(duration, currentTime + 2), color: SEGMENT_COLORS[idx] };
-                    setSegments((prev) => [...prev, seg]);
-                    setSelectedSegmentId(seg.id);
-                  }}><Plus className="w-3 h-3" /></button>
-                </div>
-                <div className="space-y-2">
+            <div ref={timelineRef} onClick={handleTimelineClick} className="flex-1 relative overflow-x-auto custom-scrollbar cursor-pointer">
+              <div className="h-full p-2" style={{ width: timelineTotalWidth }}>
+                <div className="text-[10px] uppercase font-black text-slate-500 mb-1">Timeline</div>
+
+                <div className="h-12 rounded border border-slate-800 bg-slate-900/30 relative mb-2 overflow-hidden">
                   {segments.map((s) => (
-                    <button key={s.id} onClick={() => setSelectedSegmentId(s.id)} className={`w-full text-left rounded border p-2 ${selectedSegmentId === s.id ? 'border-red-500 bg-red-900/10' : 'border-slate-700 bg-slate-900/40'}`}>
-                      <div className="text-xs font-semibold truncate">{s.name}</div>
-                      <div className="text-[10px] text-slate-400 truncate">{s.start.toFixed(1)}s - {s.end.toFixed(1)}s</div>
+                    <button
+                      key={s.id}
+                      onClick={(e) => { e.stopPropagation(); setSelectedSegmentId(s.id); }}
+                      className="absolute top-0 bottom-0 border-r border-black/30 text-left px-2"
+                      style={{ left: `${(s.start / duration) * 100}%`, width: `${((s.end - s.start) / duration) * 100}%`, background: `${s.color}66` }}
+                      title={`${s.name}: ${s.start.toFixed(2)}s - ${s.end.toFixed(2)}s`}
+                    >
+                      <div className="text-[10px] font-semibold truncate">{s.name}</div>
+                      <div className="text-[9px] opacity-80 truncate">{s.description}</div>
                     </button>
                   ))}
                 </div>
-                {selectedSegment && (
-                  <div className="mt-3 space-y-2 border-t border-slate-800 pt-3">
-                    <input value={selectedSegment.name} onChange={(e) => setSegments((prev) => prev.map((s) => s.id === selectedSegment.id ? { ...s, name: e.target.value } : s))} className="w-full bg-slate-900 border border-slate-700 rounded p-1 text-xs" />
-                    <textarea value={selectedSegment.description} onChange={(e) => setSegments((prev) => prev.map((s) => s.id === selectedSegment.id ? { ...s, description: e.target.value } : s))} className="w-full bg-slate-900 border border-slate-700 rounded p-1 text-xs h-16" />
-                    <div className="grid grid-cols-2 gap-2">
-                      <input type="number" step="0.1" value={selectedSegment.start} onChange={(e) => setSegments((prev) => prev.map((s) => s.id === selectedSegment.id ? { ...s, start: Math.max(0, Number(e.target.value)) } : s))} className="bg-slate-900 border border-slate-700 rounded p-1 text-xs" />
-                      <input type="number" step="0.1" value={selectedSegment.end} onChange={(e) => setSegments((prev) => prev.map((s) => s.id === selectedSegment.id ? { ...s, end: Math.min(duration, Number(e.target.value)) } : s))} className="bg-slate-900 border border-slate-700 rounded p-1 text-xs" />
-                    </div>
-                    <button onClick={() => {
-                      setSegments((prev) => prev.filter((s) => s.id !== selectedSegment.id));
-                      setSelectedSegmentId(segments[0]?.id || '');
-                    }} className="w-full text-xs bg-red-700 rounded p-1">Delete Segment</button>
-                  </div>
-                )}
-              </div>
 
-              <div ref={timelineRef} onClick={handleTimelineClick} className="flex-1 relative overflow-x-auto custom-scrollbar cursor-pointer">
-                <div className="h-full p-2" style={{ width: timelineTotalWidth }}>
-                  <div className="text-[10px] uppercase font-black text-slate-500 mb-1">Timeline</div>
-                  <div className="h-8 rounded border border-slate-800 bg-slate-900/30 relative mb-2">
-                    {segments.map((s) => (
-                      <div key={s.id} className="absolute h-6 top-1 rounded border" style={{ left: `${(s.start / duration) * 100}%`, width: `${((s.end - s.start) / duration) * 100}%`, background: `${s.color}33`, borderColor: s.color }}>
-                        <span className="text-[10px] px-1">{s.name}</span>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="h-14 rounded border border-slate-800 bg-slate-900/30 relative">
-                    {clips.map((clip: any, idx: number) => {
-                      const start = clip.startTick / 30;
-                      const end = (clip.startTick + clip.durationTicks) / 30;
-                      const color = `hsl(${(idx * 47) % 360} 80% 55%)`;
-                      return (
-                        <button
-                          key={clip.id || idx}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            const file = files.find((f) => f.name === clip.blueprintId);
-                            if (file) {
-                              setActiveFileId(file.id);
-                              setActiveTab('code');
-                            }
-                          }}
-                          className="absolute top-2 h-9 rounded-lg border text-left px-2 overflow-hidden"
-                          style={{ left: `${(start / duration) * 100}%`, width: `${((end - start) / duration) * 100}%`, background: `${color}22`, borderColor: color }}
-                          title={`${clip.id || clip.blueprintId} (${start.toFixed(2)}s - ${end.toFixed(2)}s)`}
-                        >
-                          <div className="text-[10px] font-bold truncate">{clip.id || clip.blueprintId}</div>
-                          <div className="text-[10px] text-slate-300 truncate">{clip.blueprintId}</div>
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  <div className="absolute top-0 bottom-0 w-px bg-white playhead z-30" style={{ left: `${(currentTime / duration) * 100}%` }} />
+                <div className="h-14 rounded border border-slate-800 bg-slate-900/30 relative">
+                  {clips.map((clip: any, idx: number) => {
+                    const start = clip.startTick / 30;
+                    const end = (clip.startTick + clip.durationTicks) / 30;
+                    const color = `hsl(${(idx * 47) % 360} 80% 55%)`;
+                    return (
+                      <button
+                        key={clip.id || idx}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const file = files.find((f) => f.name === clip.blueprintId);
+                          if (file) {
+                            setActiveFileId(file.id);
+                            setActiveTab('code');
+                          }
+                        }}
+                        className="absolute top-2 h-9 rounded-lg border text-left px-2 overflow-hidden"
+                        style={{ left: `${(start / duration) * 100}%`, width: `${((end - start) / duration) * 100}%`, background: `${color}22`, borderColor: color }}
+                        title={`${clip.id || clip.blueprintId} (${start.toFixed(2)}s - ${end.toFixed(2)}s)`}
+                      >
+                        <div className="text-[10px] font-bold truncate">{clip.id || clip.blueprintId}</div>
+                        <div className="text-[10px] text-slate-300 truncate">{clip.blueprintId}</div>
+                      </button>
+                    );
+                  })}
                 </div>
+
+                <div className="absolute top-0 bottom-0 w-px bg-white playhead z-30" style={{ left: `${(currentTime / duration) * 100}%` }} />
               </div>
             </div>
           </footer>
@@ -589,13 +587,19 @@ const App: React.FC = () => {
         </aside>
       </main>
 
-      <AssetModal
-        isOpen={showAssetModal}
-        onClose={() => setShowAssetModal(false)}
-        assets={assets}
-        onImport={handleImportAssets}
-        onAnalyze={(asset) => { setAnalyzingAsset(asset); setShowAnalysisModal(true); }}
-        onDelete={(id) => setAssets((prev) => prev.filter((a) => a.id !== id))}
+      <SegmentModal
+        segment={selectedSegment}
+        duration={duration}
+        onClose={() => setSelectedSegmentId('')}
+        onSave={(segment) => setSegments((prev) => prev.map((s) => s.id === segment.id ? { ...segment, end: Math.max(segment.start, segment.end) } : s))}
+        onDelete={(id) => setSegments((prev) => prev.filter((s) => s.id !== id))}
+      />
+
+      <ExportProgressModal
+        isOpen={showExportModal}
+        progress={exportProgress}
+        done={exportProgress >= 100}
+        onClose={() => setShowExportModal(false)}
       />
 
       <AudioAnalysisModal

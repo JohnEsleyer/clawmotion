@@ -33,8 +33,14 @@ export class ClawPlayer {
         const outputCanvas = this.postProcessor.getCanvas();
         outputCanvas.style.display = 'block';
         outputCanvas.style.width = '100%';
-        outputCanvas.style.height = '100%';
+        outputCanvas.style.height = 'auto';
+        outputCanvas.style.maxWidth = '100%';
+        outputCanvas.style.maxHeight = '100%';
+        outputCanvas.style.objectFit = 'contain';
         outputCanvas.style.imageRendering = 'auto';
+        this.container.style.display = 'flex';
+        this.container.style.alignItems = 'center';
+        this.container.style.justifyContent = 'center';
         this.container.appendChild(outputCanvas);
 
         // Initial render
