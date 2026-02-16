@@ -476,7 +476,7 @@ const App: React.FC = () => {
   };
 
   const handleTimelinePointerDown = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (e.target !== e.currentTarget) return;
+    if ((e.target as HTMLElement).closest('button')) return;
     seekFromClientX(e.clientX);
     startDrag({ kind: 'playhead', id: '__playhead__', action: 'move', originStart: currentTime, originEnd: currentTime }, e.clientX);
   };
