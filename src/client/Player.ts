@@ -61,13 +61,13 @@ export class ClawPlayer {
         }
     }
 
-    public seek(tick: number) {
+    public async seek(tick: number) {
         this.currentTick = Math.max(0, tick);
-        this.render();
+        await this.render();
     }
 
-    public seekToTime(seconds: number) {
-        this.seek(this.engine.toTicks(seconds));
+    public async seekToTime(seconds: number) {
+        await this.seek(this.engine.toTicks(seconds));
     }
 
     private loop = () => {
@@ -90,14 +90,40 @@ export class ClawPlayer {
         this.animationFrameId = requestAnimationFrame(this.loop);
     };
 
-    private render() {
-        // 1. Render all active clips into their own canvases
+    private async render() {
+        // 1. Identify active video clips and seek them
+        const activeClips = this.engine.clips.filter(c =>
+            this.currentTick >= c.startTick &&
+            this.currentTick < (c.startTick + c.durationTicks)
+        );
+
+        const videoSyncs = activeClips.map(async (clip) => {
+            const blueprint = this.engine.registry.get(clip.blueprintId);
+            if (clip.blueprintId === 'video' || (clip.props?.assetId && clip.props.assetId.endsWith('.mp4'))) {
+                const video = this.engine.assets.get(clip.props?.assetId) as HTMLVideoElement;
+                if (video && video.tagName === 'VIDEO') {
+                    const localTick = this.currentTick - clip.startTick;
+                    const targetTime = localTick / this.engine.config.fps;
+
+                    if (Math.abs(video.currentTime - targetTime) > 0.001) {
+                        return new Promise<void>((resolve) => {
+                            video.onseeked = () => resolve();
+                            video.currentTime = targetTime;
+                        });
+                    }
+                }
+            }
+        });
+
+        await Promise.all(videoSyncs);
+
+        // 2. Render all active clips into their own canvases
         const layerData = this.engine.renderToLayers(this.currentTick, (clip: Clip) => {
             const canvas = this.getOrLayerCanvas(clip.id);
             return canvas.getContext('2d');
         });
 
-        // 2. Composite layers using WebGL
+        // 3. Composite layers using WebGL
         const compositeLayers: LayerData[] = layerData.map(l => ({
             source: this.layerCanvases.get(l!.clip.id)!,
             opacity: l!.opacity,
@@ -107,7 +133,7 @@ export class ClawPlayer {
 
         this.compositor.composite(compositeLayers);
 
-        // 3. Apply Post-Processing to the composited result
+        // 4. Apply Post-Processing to the composited result
         const effects = (this.engine.config as any).effects || {};
         this.postProcessor.render(this.compositor.getCanvas(), effects);
 

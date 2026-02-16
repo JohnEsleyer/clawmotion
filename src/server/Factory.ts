@@ -52,6 +52,7 @@ export class MotionFactory {
         const app = express();
         const distPath = path.join(__dirname, '../../dist');
         app.use(express.static(distPath));
+        app.use('/assets', express.static(process.cwd()));
 
         app.get('/', (req, res) => {
             const htmlPath = path.join(__dirname, './preview.html');
@@ -139,8 +140,14 @@ export class MotionFactory {
 
             if (imageMap) {
                 for (const [id, url] of Object.entries(imageMap)) {
-                    const img = await loader.loadImage(url);
-                    engine.assets.set(id, img);
+                    const assetUrl = url as string;
+                    if (assetUrl.endsWith('.mp4') || assetUrl.endsWith('.webm')) {
+                        const video = await loader.loadVideo(assetUrl);
+                        engine.assets.set(id, video);
+                    } else {
+                        const img = await loader.loadImage(assetUrl);
+                        engine.assets.set(id, img);
+                    }
                 }
             }
 

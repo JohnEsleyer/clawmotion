@@ -46,9 +46,31 @@ export class AssetLoader {
     }
 
     /**
+     * Load video from a URL.
+     */
+    public loadVideo(url: string): Promise<HTMLVideoElement> {
+        if (this.cache.has(url)) {
+            return Promise.resolve(this.cache.get(url) as HTMLVideoElement);
+        }
+
+        return new Promise((resolve, reject) => {
+            const video = document.createElement('video');
+            video.crossOrigin = 'Anonymous';
+            video.src = url;
+            video.preload = 'auto';
+            video.muted = true; // Required for auto-seeking in some browsers
+            video.oncanplaythrough = () => {
+                this.cache.set(url, video);
+                resolve(video);
+            };
+            video.onerror = (err) => reject(new Error(`Failed to load video: ${url} - ${err}`));
+        });
+    }
+
+    /**
      * Get an asset from the cache synchronously.
      */
-    public get(url: string): HTMLImageElement | HTMLAudioElement | undefined {
-        return this.cache.get(url);
+    public get(url: string): HTMLImageElement | HTMLAudioElement | HTMLVideoElement | undefined {
+        return this.cache.get(url) as any;
     }
 }

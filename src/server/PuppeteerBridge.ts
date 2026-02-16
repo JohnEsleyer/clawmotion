@@ -28,7 +28,7 @@ export class PuppeteerBridge {
     public async seekToTick(tick: number, state?: any) {
         if (!this.page) throw new Error('Page not initialized');
 
-        await this.page.evaluate((t, s) => {
+        await this.page.evaluate(async (t, s) => {
             // @ts-ignore
             if (window.player) {
                 // @ts-ignore
@@ -37,7 +37,7 @@ export class PuppeteerBridge {
                     Object.assign(window.player.engine.config, s);
                 }
                 // @ts-ignore
-                window.player.seek(t);
+                await window.player.seek(t);
             } else {
                 throw new Error('Player not found on window');
             }

@@ -168,5 +168,20 @@ export const ProBlueprints = {
         ctx.ctx.fillStyle = grad;
         ctx.ctx.fillRect(0, 0, width, height);
         ctx.ctx.restore();
+    },
+
+    'video': (ctx: BlueprintContext) => {
+        const { width, height, props, getAsset } = ctx;
+        const assetId = props.assetId;
+        const video = getAsset(assetId);
+
+        if (!video || video.tagName !== 'VIDEO') return;
+
+        const x = props.x || 0;
+        const y = props.y || 0;
+        const w = props.width || width;
+        const h = props.height || height;
+
+        ctx.ctx.drawImage(video, x, y, w, h);
     }
 };
