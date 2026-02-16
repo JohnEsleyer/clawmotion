@@ -338,7 +338,7 @@ const SegmentModal: React.FC<{
   );
 };
 
-const ExportProgressModal: React.FC<{ isOpen: boolean; progress: number; done: boolean; onClose: () => void; }> = ({ isOpen, progress, done, onClose }) => {
+const ExportProgressModal: React.FC<{ isOpen: boolean; progress: number; done: boolean; error?: string | null; outputPath?: string | null; onClose: () => void; }> = ({ isOpen, progress, done, error, outputPath, onClose }) => {
   if (!isOpen) return null;
   return (
     <div className="fixed inset-0 z-[220] bg-black/85 p-8 flex items-center justify-center">
@@ -346,11 +346,13 @@ const ExportProgressModal: React.FC<{ isOpen: boolean; progress: number; done: b
         <h3 className="font-bold">Server Rendering Export</h3>
         <p className="text-xs text-slate-400">Preparing and rendering your timeline on the server.</p>
         <div className="h-3 bg-slate-900 rounded-full overflow-hidden border border-slate-800">
-          <div className="h-full bg-red-500 transition-all" style={{ width: `${progress}%` }} />
+          <div className={`h-full transition-all ${error ? 'bg-amber-500' : 'bg-red-500'}`} style={{ width: `${progress}%` }} />
         </div>
         <div className="text-xs font-mono text-right">{progress}%</div>
+        {error && <div className="text-xs text-amber-300 rounded border border-amber-500/40 bg-amber-500/10 p-2">{error}</div>}
+        {done && outputPath && <div className="text-xs text-emerald-300 rounded border border-emerald-500/40 bg-emerald-500/10 p-2 font-mono break-all">Saved: {outputPath}</div>}
         <div className="flex justify-end">
-          <button onClick={onClose} disabled={!done} className="px-4 py-2 text-xs rounded bg-red-600 disabled:opacity-40">{done ? 'Close' : 'Rendering...'}</button>
+          <button onClick={onClose} disabled={!done && !error} className="px-4 py-2 text-xs rounded bg-red-600 disabled:opacity-40">{done ? 'Close' : error ? 'Close' : 'Rendering...'}</button>
         </div>
       </div>
     </div>
@@ -466,6 +468,9 @@ const App: React.FC = () => {
   const [showExportModal, setShowExportModal] = useState(false);
   const [showTimelineHelp, setShowTimelineHelp] = useState(false);
   const [exportProgress, setExportProgress] = useState(0);
+  const [exportJobId, setExportJobId] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [exportOutputPath, setExportOutputPath] = useState<string | null>(null);
   const [clipOverrides, setClipOverrides] = useState<Record<string, { start: number; end: number }>>({});
   const [dragTarget, setDragTarget] = useState<TimelineDragTarget | null>(null);
 
@@ -857,10 +862,33 @@ const App: React.FC = () => {
     const selectedFiles = e.target.files;
     if (!selectedFiles) return;
     const newAssets: Asset[] = [];
+
+    const formData = new FormData();
+    for (let i = 0; i < selectedFiles.length; i++) {
+      formData.append('files', selectedFiles[i]);
+    }
+
+    let uploadedByName = new Map<string, string>();
+    try {
+      const uploadRes = await fetch('/api/assets/import', { method: 'POST', body: formData });
+      if (uploadRes.ok) {
+        const uploadJson = await uploadRes.json();
+        uploadedByName = new Map((uploadJson.saved || []).map((entry: any) => [entry.name, entry.publicPath]));
+      }
+    } catch {
+      // fallback to local object URLs only
+    }
+
     for (let i = 0; i < selectedFiles.length; i++) {
       const file = selectedFiles[i];
       const type = file.type.startsWith('video/') ? 'video' : file.type.startsWith('audio/') ? 'audio' : 'image';
-      const asset: Asset = { id: `asset-${Date.now()}-${i}`, name: file.name, type, url: URL.createObjectURL(file) };
+      const asset: Asset = {
+        id: `asset-${Date.now()}-${i}`,
+        name: file.name,
+        type,
+        url: URL.createObjectURL(file),
+        serverPath: uploadedByName.get(file.name)
+      };
       if (type === 'audio') {
         try {
           asset.metadata = await analyzeAudioFile(file);
@@ -888,17 +916,109 @@ const App: React.FC = () => {
     setSelectedSegmentId(seg.id);
   };
 
-  const handleExport = () => {
+  const handleExport = async () => {
+    if (!studioEngineRef.current) return;
+
     setShowExportModal(true);
-    setExportProgress(3);
+    setExportProgress(1);
+    setExportError(null);
+    setExportOutputPath(null);
+
+    const engineState = studioEngineRef.current.getState();
+    const clipPayload = engineState.clips.map((clip: any) => ({
+      ...clip,
+      props: clip.props || {}
+    }));
+
+    const blueprints = files
+      .filter((file) => file.type === 'clip')
+      .reduce<Record<string, string>>((acc, file) => {
+        acc[file.name] = file.code;
+        return acc;
+      }, {});
+
+    const imageAssets = assets
+      .filter((asset) => asset.type === 'image' || asset.type === 'video')
+      .reduce<Record<string, string>>((acc, asset) => {
+        const renderPath = asset.serverPath || asset.url;
+        if (renderPath) acc[asset.id] = renderPath;
+        return acc;
+      }, {});
+
+    try {
+      const startRes = await fetch('/api/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          config: {
+            width: selectedSize.width,
+            height: selectedSize.height,
+            fps: 30,
+            duration,
+            concurrency: 2
+          },
+          clips: clipPayload,
+          blueprints,
+          images: imageAssets,
+          output: `clawstudio-export-${Date.now()}.mp4`
+        })
+      });
+
+      if (!startRes.ok) {
+        const text = await startRes.text();
+        throw new Error(text || 'Failed to start export.');
+      }
+
+      const { jobId } = await startRes.json();
+      setExportJobId(jobId);
+    } catch (err: any) {
+      setExportError(err?.message || 'Failed to start export.');
+      setExportProgress(100);
+    }
   };
 
   useEffect(() => {
-    if (!showExportModal) return;
-    if (exportProgress >= 100) return;
-    const t = setTimeout(() => setExportProgress((prev) => Math.min(100, prev + Math.max(3, Math.round((100 - prev) * 0.18)))), 350);
-    return () => clearTimeout(t);
-  }, [showExportModal, exportProgress]);
+    if (!exportJobId || !showExportModal) return;
+    let cancelled = false;
+
+    const poll = async () => {
+      try {
+        const statusRes = await fetch(`/api/export?id=${encodeURIComponent(exportJobId)}`);
+        if (!statusRes.ok) {
+          throw new Error('Unable to fetch export status.');
+        }
+        const status = await statusRes.json();
+        if (cancelled) return;
+
+        setExportProgress(Math.max(1, status.progress || 0));
+        if (status.status === 'done') {
+          setExportProgress(100);
+          setExportOutputPath(status.outputPath || null);
+          setExportJobId(null);
+          return;
+        }
+        if (status.status === 'error') {
+          setExportError(status.error || 'Export failed.');
+          setExportProgress(Math.max(100, status.progress || 100));
+          setExportJobId(null);
+          return;
+        }
+
+        window.setTimeout(poll, 500);
+      } catch (err: any) {
+        if (cancelled) return;
+        setExportError(err?.message || 'Failed while monitoring export.');
+        setExportProgress(100);
+        setExportJobId(null);
+      }
+    };
+
+    void poll();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [exportJobId, showExportModal]);
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-[#0a0a0f] text-slate-200">
@@ -916,7 +1036,7 @@ const App: React.FC = () => {
           </label>
           <button onClick={rebuildEngine} className="px-3 py-1.5 text-xs rounded bg-slate-800"><RefreshCw className="w-3 h-3 inline mr-1" />Rebuild</button>
           <button onClick={() => navigator.clipboard.writeText(buildFullContext())} className="px-3 py-1.5 text-xs rounded bg-slate-800"><Copy className="w-3 h-3 inline mr-1" />Copy Context</button>
-          <button onClick={handleExport} className="px-3 py-1.5 text-xs rounded bg-red-600"><Download className="w-3 h-3 inline mr-1" />Export</button>
+          <button onClick={() => { void handleExport(); }} disabled={Boolean(exportJobId)} className="px-3 py-1.5 text-xs rounded bg-red-600 disabled:opacity-50"><Download className="w-3 h-3 inline mr-1" />{exportJobId ? 'Exporting...' : 'Export'}</button>
         </div>
       </header>
 
@@ -1198,7 +1318,14 @@ const App: React.FC = () => {
         isOpen={showExportModal}
         progress={exportProgress}
         done={exportProgress >= 100}
-        onClose={() => setShowExportModal(false)}
+        error={exportError}
+        outputPath={exportOutputPath}
+        onClose={() => {
+          setShowExportModal(false);
+          setExportError(null);
+          setExportOutputPath(null);
+          if (exportProgress >= 100) setExportProgress(0);
+        }}
       />
 
       <TimelineHelpModal

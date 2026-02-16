@@ -30,6 +30,7 @@ export interface Asset {
     name: string;
     type: 'image' | 'video' | 'audio';
     url: string;
+    serverPath?: string;
     metadata?: AudioMetadata;
 }
 
