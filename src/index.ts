@@ -1,3 +1,3 @@
 export * from './core';
-export * from './server';
-// Note: client side bundle is handled by esbuild within the server factory
+// Note: Client logic and Server logic should be imported via subpaths for optimal tree-shaking.
+// e.g., import { ... } from '@johnesleyer/clawmotion/server';

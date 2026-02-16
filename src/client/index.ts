@@ -1,9 +1,13 @@
+export * from './Player';
+export * from './AssetLoader';
+export * from './PostProcessor';
+export * from './Compositor';
+
 import { ClawPlayer } from './Player';
+import { AssetLoader } from './AssetLoader';
 import { ClawEngine } from '../core/Engine';
 import { ClawMath } from '../core/Math';
 import { ProBlueprints } from '../blueprints/ProBlueprints';
-
-import { AssetLoader } from './AssetLoader';
 
 // Expose to window for browser access
 (window as any).ClawPlayer = ClawPlayer;
