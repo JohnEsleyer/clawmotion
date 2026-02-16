@@ -115,12 +115,20 @@ program
                     ? 'start'
                     : 'xdg-open';
 
-            try {
-                spawn(openCmd, [studioUrl], { stdio: 'ignore', detached: true, shell: process.platform === 'win32' });
-                console.log(`🌐 Opened ${studioUrl}`);
-            } catch {
+            const opener = spawn(openCmd, [studioUrl], {
+                stdio: 'ignore',
+                detached: true,
+                shell: process.platform === 'win32',
+            });
+
+            opener.once('error', () => {
                 console.log(`🌐 Open ${studioUrl} in your browser.`);
-            }
+            });
+
+            opener.once('spawn', () => {
+                console.log(`🌐 Opened ${studioUrl}`);
+                opener.unref();
+            });
         };
 
         setTimeout(openUrl, 2000);
