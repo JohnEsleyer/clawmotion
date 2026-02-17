@@ -338,17 +338,21 @@ const SegmentModal: React.FC<{
   );
 };
 
-const ExportProgressModal: React.FC<{ isOpen: boolean; progress: number; done: boolean; error?: string | null; outputPath?: string | null; onClose: () => void; }> = ({ isOpen, progress, done, error, outputPath, onClose }) => {
+const ExportProgressModal: React.FC<{ isOpen: boolean; progress: number; done: boolean; phase: 'preparing' | 'rendering' | 'stitching' | 'done'; completedFrames: number; totalFrames: number; error?: string | null; outputPath?: string | null; onClose: () => void; }> = ({ isOpen, progress, done, phase, completedFrames, totalFrames, error, outputPath, onClose }) => {
   if (!isOpen) return null;
   return (
     <div className="fixed inset-0 z-[220] bg-black/85 p-8 flex items-center justify-center">
       <div className="bg-[#0f0f1a] border border-slate-700 rounded-2xl w-full max-w-xl p-6 space-y-4">
-        <h3 className="font-bold">Server Rendering Export</h3>
-        <p className="text-xs text-slate-400">Preparing and rendering your timeline on the server.</p>
+        <h3 className="font-bold">🦀 Server Rendering Export</h3>
+        <p className="text-xs text-slate-400">Deterministic frame progress so you can track how close rendering is to done.</p>
         <div className="h-3 bg-slate-900 rounded-full overflow-hidden border border-slate-800">
-          <div className={`h-full transition-all ${error ? 'bg-amber-500' : 'bg-red-500'}`} style={{ width: `${progress}%` }} />
+          <div className={`h-full transition-all duration-300 ${error ? 'bg-amber-500' : 'bg-red-500'}`} style={{ width: `${progress}%` }} />
         </div>
-        <div className="text-xs font-mono text-right">{progress}%</div>
+        <div className="flex items-center justify-between text-xs font-mono">
+          <span className="text-slate-400">🦀 {phase === 'preparing' ? 'Preparing renderer' : phase === 'rendering' ? 'Rendering frames' : phase === 'stitching' ? 'Stitching chunks' : 'Done'}</span>
+          <span>{progress}%</span>
+        </div>
+        <div className="text-[11px] text-slate-500 font-mono">Frames: {Math.min(completedFrames, totalFrames)} / {Math.max(1, totalFrames)}</div>
         {error && <div className="text-xs text-amber-300 rounded border border-amber-500/40 bg-amber-500/10 p-2">{error}</div>}
         {done && outputPath && <div className="text-xs text-emerald-300 rounded border border-emerald-500/40 bg-emerald-500/10 p-2 font-mono break-all">Saved: {outputPath}</div>}
         <div className="flex justify-end">
@@ -471,6 +475,9 @@ const App: React.FC = () => {
   const [exportJobId, setExportJobId] = useState<string | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
   const [exportOutputPath, setExportOutputPath] = useState<string | null>(null);
+  const [exportPhase, setExportPhase] = useState<'preparing' | 'rendering' | 'stitching' | 'done'>('preparing');
+  const [exportCompletedFrames, setExportCompletedFrames] = useState(0);
+  const [exportTotalFrames, setExportTotalFrames] = useState(1);
   const [clipOverrides, setClipOverrides] = useState<Record<string, { start: number; end: number }>>({});
   const [dragTarget, setDragTarget] = useState<TimelineDragTarget | null>(null);
 
@@ -923,6 +930,9 @@ const App: React.FC = () => {
     setExportProgress(1);
     setExportError(null);
     setExportOutputPath(null);
+    setExportPhase('preparing');
+    setExportCompletedFrames(0);
+    setExportTotalFrames(Math.max(1, Math.round(duration * 30)));
 
     const engineState = studioEngineRef.current.getState();
     const clipPayload = engineState.clips.map((clip: any) => ({
@@ -991,14 +1001,20 @@ const App: React.FC = () => {
         if (cancelled) return;
 
         setExportProgress(Math.max(1, status.progress || 0));
+        setExportPhase(status.phase || 'rendering');
+        setExportCompletedFrames(status.completedFrames || 0);
+        setExportTotalFrames(Math.max(1, status.totalFrames || Math.round(duration * 30)));
         if (status.status === 'done') {
           setExportProgress(100);
+          setExportPhase('done');
+          setExportCompletedFrames(status.totalFrames || Math.round(duration * 30));
           setExportOutputPath(status.outputPath || null);
           setExportJobId(null);
           return;
         }
         if (status.status === 'error') {
           setExportError(status.error || 'Export failed.');
+          setExportPhase('done');
           setExportProgress(Math.max(100, status.progress || 100));
           setExportJobId(null);
           return;
@@ -1318,6 +1334,9 @@ const App: React.FC = () => {
         isOpen={showExportModal}
         progress={exportProgress}
         done={exportProgress >= 100}
+        phase={exportPhase}
+        completedFrames={exportCompletedFrames}
+        totalFrames={exportTotalFrames}
         error={exportError}
         outputPath={exportOutputPath}
         onClose={() => {
