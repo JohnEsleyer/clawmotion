@@ -8,7 +8,7 @@ import * as fs from 'fs';
 import ffmpeg from 'fluent-ffmpeg';
 
 export interface RenderProgress {
-    phase: 'rendering' | 'stitching' | 'done';
+    phase: 'preparing' | 'rendering' | 'stitching' | 'done';
     completedFrames: number;
     totalFrames: number;
     percent: number;
@@ -92,6 +92,15 @@ export class MotionFactory {
      * Render the video to a file, supporting parallel chunks.
      */
     public async render(config: ClawConfig, clips: Clip[], outputPath: string, audioData?: any, images?: Record<string, string>, clientEntry?: string, onProgress?: (progress: RenderProgress) => void) {
+        if (onProgress) {
+            onProgress({
+                phase: 'preparing',
+                completedFrames: 0,
+                totalFrames: Math.max(1, Math.floor(config.duration * config.fps)),
+                percent: 2
+            });
+        }
+
         await this.serve(clientEntry);
 
         const concurrency = config.concurrency || 1;
@@ -110,10 +119,16 @@ export class MotionFactory {
         // Initialize progress
         if (onProgress) {
             onProgress({
+                phase: 'preparing',
+                completedFrames: 0,
+                totalFrames: totalTicks,
+                percent: 5
+            });
+            onProgress({
                 phase: 'rendering',
                 completedFrames: 0,
                 totalFrames: totalTicks,
-                percent: 0
+                percent: 8
             });
         }
 
@@ -134,7 +149,7 @@ export class MotionFactory {
                         phase: 'rendering',
                         completedFrames,
                         totalFrames: totalTicks,
-                        percent: Math.min(99, Math.round((completedFrames / Math.max(1, totalTicks)) * 100))
+                        percent: Math.min(99, Math.max(8, Math.round(8 + (completedFrames / Math.max(1, totalTicks)) * 91)))
                     });
                 }
             }));

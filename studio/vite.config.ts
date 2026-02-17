@@ -5,6 +5,7 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 import fs from 'fs';
 import { pathToFileURL } from 'url';
+import readline from 'readline';
 interface ExportRequest {
   config: { width: number; height: number; fps: number; duration: number; concurrency?: number };
   clips: any[];
@@ -23,6 +24,18 @@ type ExportJob = {
   outputPath: string;
   error?: string;
 };
+
+function drawProgressBar(percent: number, phase: ExportJob['phase'], current: number, total: number) {
+  if (!process.stdout.isTTY) return;
+
+  const safePercent = Math.max(0, Math.min(100, Math.round(percent)));
+  const width = 30;
+  const completed = Math.floor((safePercent / 100) * width);
+  const bar = `${'█'.repeat(completed)}${'░'.repeat(width - completed)}`;
+
+  readline.cursorTo(process.stdout, 0);
+  process.stdout.write(`claw-render [${bar}] ${safePercent}% | ${phase} (${current}/${total})`);
+}
 
 function workspacePlugin(workspace: string): Plugin {
   const exportJobs = new Map<string, ExportJob>();
@@ -220,6 +233,11 @@ ${blueprintEntries}
               : path.resolve(__dirname, '../src/server/Factory.ts');
             const factoryModule = await import(pathToFileURL(factoryModulePath).href);
             const factory = new factoryModule.MotionFactory();
+
+            if (process.stdout.isTTY) {
+              process.stdout.write('\n');
+            }
+
             try {
               await factory.render(payload.config, payload.clips, outputPath, undefined, payload.images, tempEntryPath, (progressUpdate: any) => {
                 const job = exportJobs.get(jobId);
@@ -228,12 +246,17 @@ ${blueprintEntries}
                 job.completedFrames = progressUpdate.completedFrames;
                 job.totalFrames = progressUpdate.totalFrames;
                 job.progress = progressUpdate.percent;
+
+                drawProgressBar(job.progress, job.phase, job.completedFrames, job.totalFrames);
               });
               const job = exportJobs.get(jobId);
               if (job) {
                 job.progress = 100;
                 job.phase = 'done';
                 job.status = 'done';
+                if (process.stdout.isTTY) {
+                  process.stdout.write('\n✅ Render complete\n');
+                }
               }
             } catch (error: any) {
               const job = exportJobs.get(jobId);
@@ -241,6 +264,9 @@ ${blueprintEntries}
                 job.status = 'error';
                 job.phase = 'done';
                 job.error = error?.message || String(error);
+                if (process.stdout.isTTY) {
+                  process.stdout.write('\n❌ Render failed\n');
+                }
               }
             } finally {
               if (fs.existsSync(tempEntryPath)) fs.unlinkSync(tempEntryPath);

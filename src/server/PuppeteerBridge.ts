@@ -15,7 +15,9 @@ export class PuppeteerBridge {
                 '--disable-setuid-sandbox',
                 '--disable-dev-shm-usage',
                 '--hide-scrollbars',
-                '--mute-audio'
+                '--mute-audio',
+                '--disable-gpu-sandbox',
+                '--disable-accelerated-2d-canvas'
             ]
         });
         this.page = await this.browser.newPage();
@@ -23,6 +25,15 @@ export class PuppeteerBridge {
         this.page.on('console', (msg) => {
             const type = msg.type();
             const text = msg.text();
+
+            if (
+                text.includes('GroupMarkerNotSet') ||
+                text.includes('GL Driver Message') ||
+                text.includes('fallback to software WebGL')
+            ) {
+                return;
+            }
+
             if (type === 'error' && !text.includes('WebGL')) {
                 console.error(`[Browser Error] ${text}`);
             }
