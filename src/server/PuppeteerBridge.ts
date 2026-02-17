@@ -10,12 +10,32 @@ export class PuppeteerBridge {
     public async launch(url: string, width: number, height: number): Promise<any> {
         this.browser = await puppeteer.launch({
             headless: true,
-            args: ['--no-sandbox', '--disable-setuid-sandbox']
+            args: [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+                '--hide-scrollbars',
+                '--mute-audio'
+            ]
         });
         this.page = await this.browser.newPage();
+
+        this.page.on('console', (msg) => {
+            const type = msg.type();
+            const text = msg.text();
+            if (type === 'error' && !text.includes('WebGL')) {
+                console.error(`[Browser Error] ${text}`);
+            }
+        });
+
+        this.page.on('pageerror', (err) => {
+            const message = err instanceof Error ? err.message : String(err);
+            console.error(`[Browser PageError] ${message}`);
+        });
+
         await this.page.setViewport({ width, height });
 
-        return await this.page.goto(url, { waitUntil: 'networkidle0' });
+        return await this.page.goto(url, { waitUntil: 'load', timeout: 30_000 });
     }
 
     /**

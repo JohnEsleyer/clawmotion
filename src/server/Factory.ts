@@ -252,14 +252,16 @@ export class MotionFactory {
                 effects: config.effects
             });
             const frame = await bridge.captureFrame();
-            passThrough.write(frame);
+
+            const canWrite = passThrough.write(frame);
+            if (!canWrite) {
+                await new Promise<void>((resolve) => passThrough.once('drain', resolve));
+            }
+
             if (onFrameDone) onFrameDone();
 
-            // CRITICAL FIX: Yield to event loop to allow API polling (Studio UI) to succeed
-            // Without this, the heavy render loop blocks express/vite middlewares
-            if (tick % 2 === 0) {
-                await new Promise(resolve => setTimeout(resolve, 0));
-            }
+            // Yield the event loop so Studio polling and other I/O can progress during long renders.
+            await new Promise<void>((resolve) => setTimeout(resolve, 0));
         }
 
         passThrough.end();
@@ -274,8 +276,6 @@ export class MotionFactory {
 
     private async stitchChunks(chunkFiles: string[], outputPath: string, debug?: boolean) {
         return new Promise<void>((resolve, reject) => {
-            const command = ffmpeg();
-
             // Create a temporary file list for FFmpeg concat demuxer
             const listPath = path.join(process.cwd(), '.claw-temp', 'list.txt');
             const listContent = chunkFiles.map(f => `file '${path.resolve(f)}'`).join('\n');
