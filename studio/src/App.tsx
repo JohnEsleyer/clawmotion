@@ -344,7 +344,6 @@ const ExportProgressModal: React.FC<{ isOpen: boolean; progress: number; done: b
     <div className="fixed inset-0 z-[220] bg-black/85 p-8 flex items-center justify-center">
       <div className="bg-[#0f0f1a] border border-slate-700 rounded-2xl w-full max-w-xl p-6 space-y-4">
         <h3 className="font-bold">🦀 Server Rendering Export</h3>
-        <p className="text-xs text-slate-400">Deterministic frame progress so you can track how close rendering is to done.</p>
         <div className="h-3 bg-slate-900 rounded-full overflow-hidden border border-slate-800">
           <div className={`h-full transition-all duration-300 ${error ? 'bg-amber-500' : 'bg-red-500'}`} style={{ width: `${progress}%` }} />
         </div>
@@ -478,6 +477,19 @@ const App: React.FC = () => {
   const [exportPhase, setExportPhase] = useState<'preparing' | 'rendering' | 'stitching' | 'done'>('preparing');
   const [exportCompletedFrames, setExportCompletedFrames] = useState(0);
   const [exportTotalFrames, setExportTotalFrames] = useState(1);
+
+  const triggerExportDownload = useCallback((jobId: string, outputPath?: string | null) => {
+    if (typeof document === 'undefined') return;
+    const link = document.createElement('a');
+    link.href = `/api/export/download?id=${encodeURIComponent(jobId)}`;
+    const fileName = outputPath?.split(/[\/]/).pop();
+    if (fileName) {
+      link.download = fileName;
+    }
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }, []);
   const [clipOverrides, setClipOverrides] = useState<Record<string, { start: number; end: number }>>({});
   const [dragTarget, setDragTarget] = useState<TimelineDragTarget | null>(null);
 
@@ -1009,6 +1021,7 @@ const App: React.FC = () => {
           setExportPhase('done');
           setExportCompletedFrames(status.totalFrames || Math.round(duration * 30));
           setExportOutputPath(status.outputPath || null);
+          triggerExportDownload(exportJobId, status.outputPath || null);
           setExportJobId(null);
           return;
         }
@@ -1034,7 +1047,7 @@ const App: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [exportJobId, showExportModal]);
+  }, [duration, exportJobId, showExportModal, triggerExportDownload]);
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-[#0a0a0f] text-slate-200">

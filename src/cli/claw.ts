@@ -10,16 +10,14 @@ import { ClawConfig, Clip } from '../core/Engine';
 const program = new Command();
 
 const ANSI_RED = '\x1b[31m';
-const ANSI_DIM = '\x1b[2m';
 const ANSI_RESET = '\x1b[0m';
 
 const renderCrabProgress = (percent: number, label: string) => {
-    const width = 26;
+    const width = 36;
     const clamped = Math.max(0, Math.min(100, Math.round(percent)));
     const filled = Math.round((clamped / 100) * width);
-    const crabs = '🦀'.repeat(Math.max(0, filled));
-    const remaining = '·'.repeat(Math.max(0, width - filled));
-    const line = `${ANSI_RED}${label} [${crabs}${ANSI_DIM}${remaining}${ANSI_RED}] ${clamped}%${ANSI_RESET}`;
+    const bar = `${'█'.repeat(Math.max(0, filled))}${'░'.repeat(Math.max(0, width - filled))}`;
+    const line = `${ANSI_RED}${label} [${bar}] ${clamped}%${ANSI_RESET}`;
     process.stdout.write(`\r${line}`);
     if (clamped >= 100) process.stdout.write('\n');
 };

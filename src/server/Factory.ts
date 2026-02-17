@@ -18,6 +18,13 @@ export class MotionFactory {
     private server: http.Server | null = null;
     private bridge: PuppeteerBridge;
     private port = 3001;
+    private readonly verbose = false;
+
+    private log(message: string) {
+        if (this.verbose) {
+            console.log(message);
+        }
+    }
 
     constructor() {
         this.bridge = new PuppeteerBridge();
@@ -34,7 +41,7 @@ export class MotionFactory {
 
         const entryPoint = clientEntry || (fs.existsSync(clientEntryTs) ? clientEntryTs : clientEntryJs);
 
-        console.log(`[Factory] Bundling client code from ${entryPoint}...`);
+        this.log(`[Factory] Bundling client code from ${entryPoint}...`);
         try {
             if (!fs.existsSync(entryPoint)) {
                 throw new Error(`Client entry point not found at ${entryPoint}`);
@@ -48,14 +55,14 @@ export class MotionFactory {
                 format: 'iife',
                 logLevel: 'error'
             });
-            console.log('[Factory] Bundling complete.');
+            this.log('[Factory] Bundling complete.');
         } catch (e) {
             console.error('[Factory] Bundling failed:', e);
             throw e;
         }
 
         // 2. Start Express
-        console.log('[Factory] Starting Express server...');
+        this.log('[Factory] Starting Express server...');
         const app = express();
         const distPath = path.join(__dirname, '../../dist');
         app.use(express.static(distPath));
@@ -72,7 +79,7 @@ export class MotionFactory {
 
         return new Promise<void>((resolve, reject) => {
             this.server = app.listen(this.port, '0.0.0.0', () => {
-                console.log(`[Factory] Renderer server started at http://localhost:${this.port}`);
+                this.log(`[Factory] Renderer server started at http://localhost:${this.port}`);
                 resolve();
             }).on('error', (err) => {
                 console.error('[Factory] Server failed to start:', err);
@@ -98,7 +105,7 @@ export class MotionFactory {
         const workers: Promise<void>[] = [];
         let completedFrames = 0;
 
-        console.log(`[Factory] Starting parallel render with ${concurrency} workers...`);
+        this.log(`[Factory] Starting parallel render with ${concurrency} workers...`);
 
         for (let i = 0; i < concurrency; i++) {
             const startTick = i * chunkSize;
@@ -125,7 +132,7 @@ export class MotionFactory {
 
         try {
             await Promise.all(workers);
-            console.log('[Factory] All chunks rendered. Stitching...');
+            this.log('[Factory] All chunks rendered. Stitching...');
             if (onProgress) {
                 onProgress({
                     phase: 'stitching',
@@ -136,7 +143,7 @@ export class MotionFactory {
             }
 
             await this.stitchChunks(chunkFiles, outputPath, config.debug);
-            console.log('[Factory] Stitching complete.');
+            this.log('[Factory] Stitching complete.');
             if (onProgress) {
                 onProgress({
                     phase: 'done',
@@ -262,7 +269,7 @@ export class MotionFactory {
                 .input(listPath)
                 .inputOptions(['-f concat', '-safe 0'])
                 .outputOptions(['-c copy']) // Use stream copy for speed and no generational loss
-                .on('start', (cmd) => debug && console.log('[Factory] FFmpeg Concatenate:', cmd))
+                .on('start', (cmd) => (debug || this.verbose) && console.log('[Factory] FFmpeg Concatenate:', cmd))
                 .on('error', (err) => {
                     if (fs.existsSync(listPath)) fs.unlinkSync(listPath);
                     reject(err);
