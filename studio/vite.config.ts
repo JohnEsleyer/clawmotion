@@ -114,6 +114,38 @@ function workspacePlugin(workspace: string): Plugin {
         });
       });
 
+      server.middlewares.use('/api/export/download', (req, res) => {
+        if (req.method !== 'GET') {
+          res.statusCode = 405;
+          res.end('Method Not Allowed');
+          return;
+        }
+
+        const url = new URL(req.url || '', 'http://localhost');
+        const id = url.searchParams.get('id');
+        if (!id || !exportJobs.has(id)) {
+          res.statusCode = 404;
+          res.end('Export job not found');
+          return;
+        }
+
+        const job = exportJobs.get(id)!;
+        if (job.status !== 'done' || !fs.existsSync(job.outputPath)) {
+          res.statusCode = 409;
+          res.end('Export is not ready');
+          return;
+        }
+
+        res.setHeader('Content-Type', 'video/mp4');
+        res.setHeader('Content-Disposition', `attachment; filename="${path.basename(job.outputPath)}"`);
+        fs.createReadStream(job.outputPath)
+          .on('error', () => {
+            res.statusCode = 500;
+            res.end('Failed to read exported video');
+          })
+          .pipe(res);
+      });
+
       server.middlewares.use('/api/export', async (req, res) => {
         if (req.method === 'GET') {
           const url = new URL(req.url || '', 'http://localhost');

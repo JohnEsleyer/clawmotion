@@ -15,9 +15,6 @@ export class PuppeteerBridge {
         this.page = await this.browser.newPage();
         await this.page.setViewport({ width, height });
 
-        // Enable console log piping from browser to node
-        this.page.on('console', msg => console.log('BROWSER:', msg.text()));
-
         return await this.page.goto(url, { waitUntil: 'networkidle0' });
     }
 
