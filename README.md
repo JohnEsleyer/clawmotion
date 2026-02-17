@@ -19,6 +19,25 @@
 
 ---
 
+## 📋 Requirements
+
+Before running ClawMotion, ensure you have the following installed:
+
+### System Dependencies
+
+```bash
+# Ubuntu/Debian
+sudo apt-get install -y ffmpeg
+
+# Chrome dependencies for Puppeteer
+# (installed automatically via npx puppeteer browsers install-deps chrome)
+```
+
+- **FFmpeg**: Required for video encoding and stitching
+- **Chrome/Puppeteer**: Required for headless browser rendering (installed via npm)
+
+---
+
 ## 🚀 Quick Start
 
 ### 1. Installation
@@ -56,14 +75,54 @@ cmotion studio
 
 ---
 
-## 🏗️ Architecture & Subpaths
+## 🏗️ Architecture
 
-ClawMotion is strictly partitioned to ensure optimal bundle sizes:
+ClawMotion uses a partitioned architecture that separates concerns between client-side preview and server-side rendering:
 
-- **`@johnesleyer/clawmotion/core`**: The logic orchestrator and deterministic math.
-- **`@johnesleyer/clawmotion/client`**: The `ClawPlayer` for browser-based playback and interactivity.
-- **`@johnesleyer/clawmotion/server`**: The `MotionFactory` (Puppeteer + FFmpeg bridge) for Node environments.
-- **`@johnesleyer/clawmotion/blueprints`**: A collection of premium, pre-built drawing functions.
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        ClawMotion                                │
+├───────────────────────┬─────────────────────────────────────────┤
+│    Client (Browser)   │           Server (Node.js)              │
+├───────────────────────┼─────────────────────────────────────────┤
+│  • ClawEngine         │  • MotionFactory                        │
+│  • ClawPlayer        │  • Puppeteer Workers                   │
+│  • Canvas 2D/WebGL   │  • FFmpeg Stitching                     │
+│  • Real-time preview │  • Parallel frame rendering             │
+└───────────────────────┴─────────────────────────────────────────┘
+         │                               │
+         └───────────────┬───────────────┘
+                         │
+                  Shared Core
+         (deterministic math, blueprints,
+          easing, seeded RNG)
+```
+
+### Core Components
+
+| Component | Description |
+|-----------|-------------|
+| **ClawEngine** | Orchestrates frame rendering, manages clips, handles timeline |
+| **ClawPlayer** | Browser-based player for real-time preview |
+| **MotionFactory** | Server-side renderer using Puppeteer + FFmpeg |
+| **Blueprint** | Pure functions defining how to draw each visual element |
+| **Clip** | Declarative definition of when and how to render a blueprint |
+
+### Render Pipeline
+
+1. **Scene Definition**: Clips and blueprints define the video structure
+2. **Client Bundle**: esbuild bundles the client code for browser execution
+3. **Frame Capture**: Puppeteer workers render frames in parallel
+4. **Video Assembly**: FFmpeg stitches frames into final MP4
+
+### Subpaths
+
+ClawMotion provides strictly partitioned exports:
+
+- **`@johnesleyer/clawmotion/core`**: Logic orchestrator, deterministic math, blueprint types
+- **`@johnesleyer/clawmotion/client`**: `ClawPlayer` for browser playback
+- **`@johnesleyer/clawmotion/server`**: `MotionFactory` (Puppeteer + FFmpeg bridge)
+- **`@johnesleyer/clawmotion/blueprints`**: Pre-built drawing functions
 
 ---
 
@@ -82,6 +141,10 @@ export const NeonPulse = (ctx: BlueprintContext) => {
     
     ctx.ctx.fillStyle = props.color || 'cyan';
     ctx.ctx.fillRect(width/2 - 50 + jitter, height/2 - 50, 100, 100);
+
+    ctx.ctx.fillStyle = 'white';
+    ctx.ctx.font = '30px Arial';
+    ctx.ctx.fillText(`Frame: ${ctx.tick}`, 50, 50);
 };
 ```
 
@@ -117,6 +180,7 @@ export default {
 - **Puppeteer**: Headless browser orchestration for frames.
 - **FFmpeg**: Cinematic video encoding.
 - **esbuild**: Lightning-fast client-side bundling.
+- **Express**: Local server for preview and render coordination.
 
 ---
 
