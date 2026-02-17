@@ -17,6 +17,9 @@ type ExportJob = {
   id: string;
   progress: number;
   status: 'running' | 'done' | 'error';
+  phase: 'preparing' | 'rendering' | 'stitching' | 'done';
+  completedFrames: number;
+  totalFrames: number;
   outputPath: string;
   error?: string;
 };
@@ -147,6 +150,9 @@ function workspacePlugin(workspace: string): Plugin {
               id: jobId,
               progress: 1,
               status: 'running',
+              phase: 'preparing',
+              completedFrames: 0,
+              totalFrames: totalTicks,
               outputPath,
             });
 
@@ -183,20 +189,25 @@ ${blueprintEntries}
             const factoryModule = await import(pathToFileURL(factoryModulePath).href);
             const factory = new factoryModule.MotionFactory();
             try {
-              await factory.render(payload.config, payload.clips, outputPath, undefined, payload.images, tempEntryPath, (tick: number) => {
-                const progress = Math.min(99, Math.round(((tick + 1) / totalTicks) * 100));
+              await factory.render(payload.config, payload.clips, outputPath, undefined, payload.images, tempEntryPath, (progressUpdate: any) => {
                 const job = exportJobs.get(jobId);
-                if (job) job.progress = progress;
+                if (!job) return;
+                job.phase = progressUpdate.phase;
+                job.completedFrames = progressUpdate.completedFrames;
+                job.totalFrames = progressUpdate.totalFrames;
+                job.progress = progressUpdate.percent;
               });
               const job = exportJobs.get(jobId);
               if (job) {
                 job.progress = 100;
+                job.phase = 'done';
                 job.status = 'done';
               }
             } catch (error: any) {
               const job = exportJobs.get(jobId);
               if (job) {
                 job.status = 'error';
+                job.phase = 'done';
                 job.error = error?.message || String(error);
               }
             } finally {

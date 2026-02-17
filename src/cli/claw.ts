@@ -9,6 +9,22 @@ import { ClawConfig, Clip } from '../core/Engine';
 
 const program = new Command();
 
+const ANSI_RED = '\x1b[31m';
+const ANSI_DIM = '\x1b[2m';
+const ANSI_RESET = '\x1b[0m';
+
+const renderCrabProgress = (percent: number, label: string) => {
+    const width = 26;
+    const clamped = Math.max(0, Math.min(100, Math.round(percent)));
+    const filled = Math.round((clamped / 100) * width);
+    const crabs = '🦀'.repeat(Math.max(0, filled));
+    const remaining = '·'.repeat(Math.max(0, width - filled));
+    const line = `${ANSI_RED}${label} [${crabs}${ANSI_DIM}${remaining}${ANSI_RED}] ${clamped}%${ANSI_RESET}`;
+    process.stdout.write(`\r${line}`);
+    if (clamped >= 100) process.stdout.write('\n');
+};
+
+
 program
     .name('cmotion')
     .description('ClawMotion CLI for programmatic video movement')
@@ -225,7 +241,14 @@ import scene from '${relativeScenePath}';
 
             console.log(`🚀 Starting render to ${outputPath}...`);
             try {
-                await factory.render(config, clips, outputPath, audioData, scene.images, tempEntryPath);
+                await factory.render(config, clips, outputPath, audioData, scene.images, tempEntryPath, (progress) => {
+                    const label = progress.phase === 'stitching'
+                        ? '🦀 Stitching'
+                        : progress.phase === 'done'
+                            ? '🦀 Complete'
+                            : '🦀 Rendering';
+                    renderCrabProgress(progress.percent, label);
+                });
                 console.log(`✨ Render complete: ${outputPath}`);
             } finally {
                 if (fs.existsSync(tempEntryPath)) fs.unlinkSync(tempEntryPath);

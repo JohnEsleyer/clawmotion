@@ -7,6 +7,13 @@ import * as path from 'path';
 import * as fs from 'fs';
 import ffmpeg from 'fluent-ffmpeg';
 
+export interface RenderProgress {
+    phase: 'rendering' | 'stitching' | 'done';
+    completedFrames: number;
+    totalFrames: number;
+    percent: number;
+}
+
 export class MotionFactory {
     private server: http.Server | null = null;
     private bridge: PuppeteerBridge;
@@ -77,7 +84,7 @@ export class MotionFactory {
     /**
      * Render the video to a file, supporting parallel chunks.
      */
-    public async render(config: ClawConfig, clips: Clip[], outputPath: string, audioData?: any, images?: Record<string, string>, clientEntry?: string, onTick?: (tick: number) => void) {
+    public async render(config: ClawConfig, clips: Clip[], outputPath: string, audioData?: any, images?: Record<string, string>, clientEntry?: string, onProgress?: (progress: RenderProgress) => void) {
         await this.serve(clientEntry);
 
         const concurrency = config.concurrency || 1;
@@ -89,6 +96,7 @@ export class MotionFactory {
 
         const chunkFiles: string[] = [];
         const workers: Promise<void>[] = [];
+        let completedFrames = 0;
 
         console.log(`[Factory] Starting parallel render with ${concurrency} workers...`);
 
@@ -102,15 +110,41 @@ export class MotionFactory {
             const chunkPath = path.join(tempDir, `${chunkId}.mp4`);
             chunkFiles.push(chunkPath);
 
-            workers.push(this.renderChunk(config, clips, chunkPath, startTick, endTick, audioData, images, onTick));
+            workers.push(this.renderChunk(config, clips, chunkPath, startTick, endTick, audioData, images, () => {
+                completedFrames += 1;
+                if (onProgress) {
+                    onProgress({
+                        phase: 'rendering',
+                        completedFrames,
+                        totalFrames: totalTicks,
+                        percent: Math.min(96, Math.round((completedFrames / Math.max(1, totalTicks)) * 96))
+                    });
+                }
+            }));
         }
 
         try {
             await Promise.all(workers);
             console.log('[Factory] All chunks rendered. Stitching...');
+            if (onProgress) {
+                onProgress({
+                    phase: 'stitching',
+                    completedFrames,
+                    totalFrames: totalTicks,
+                    percent: 97
+                });
+            }
 
             await this.stitchChunks(chunkFiles, outputPath, config.debug);
             console.log('[Factory] Stitching complete.');
+            if (onProgress) {
+                onProgress({
+                    phase: 'done',
+                    completedFrames: totalTicks,
+                    totalFrames: totalTicks,
+                    percent: 100
+                });
+            }
         } finally {
             // Cleanup chunks
             chunkFiles.forEach(f => {
@@ -124,7 +158,7 @@ export class MotionFactory {
         }
     }
 
-    private async renderChunk(config: ClawConfig, clips: Clip[], chunkPath: string, startTick: number, endTick: number, audioData?: any, images?: Record<string, string>, onTick?: (tick: number) => void) {
+    private async renderChunk(config: ClawConfig, clips: Clip[], chunkPath: string, startTick: number, endTick: number, audioData?: any, images?: Record<string, string>, onFrameDone?: () => void) {
         const bridge = new PuppeteerBridge();
         await bridge.launch(`http://127.0.0.1:${this.port}`, config.width, config.height);
 
@@ -202,7 +236,7 @@ export class MotionFactory {
             });
             const frame = await bridge.captureFrame();
             passThrough.write(frame);
-            if (onTick) onTick(tick);
+            if (onFrameDone) onFrameDone();
         }
 
         passThrough.end();
