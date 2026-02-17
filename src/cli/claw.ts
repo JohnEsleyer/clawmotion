@@ -6,22 +6,9 @@ import { spawn } from 'child_process';
 import { MotionFactory } from '../server/Factory';
 import { AudioAnalyzer } from '../server/AudioAnalyzer';
 import { ClawConfig, Clip } from '../core/Engine';
+const cliProgress = require('cli-progress');
 
 const program = new Command();
-
-const ANSI_RED = '\x1b[31m';
-const ANSI_RESET = '\x1b[0m';
-
-const renderCrabProgress = (percent: number, label: string) => {
-    const width = 36;
-    const clamped = Math.max(0, Math.min(100, Math.round(percent)));
-    const filled = Math.round((clamped / 100) * width);
-    const bar = `${'█'.repeat(Math.max(0, filled))}${'░'.repeat(Math.max(0, width - filled))}`;
-    const line = `${ANSI_RED}${label} [${bar}] ${clamped}%${ANSI_RESET}`;
-    process.stdout.write(`\r${line}`);
-    if (clamped >= 100) process.stdout.write('\n');
-};
-
 
 program
     .name('cmotion')
@@ -206,18 +193,12 @@ program
                 }
             }
 
-            // Inject blueprints into Factory for the client bundle
-            // This is the tricky part. Factory currently uses src/client/index.ts.
-            // We need it to include the project's blueprints.
-
             const factory = new MotionFactory();
 
             // Generate a temporary entry point for the browser to include the scene's blueprints
             const tempEntryPath = path.join(process.cwd(), '.claw-temp-entry.ts');
             const relativeScenePath = './' + path.relative(process.cwd(), absoluteFilePath).replace(/\\/g, '/').replace(/\.ts$/, '');
 
-            // Determine if we should import from local src or the package
-            // NOTE: In production, this would be '@johnesleyer/clawmotion'
             const srcPath = path.join(process.cwd(), 'src');
             const isDev = fs.existsSync(srcPath);
             const corePath = isDev ? './src' : '@johnesleyer/clawmotion';
@@ -238,18 +219,33 @@ import scene from '${relativeScenePath}';
             fs.writeFileSync(tempEntryPath, entryContent);
 
             console.log(`🚀 Starting render to ${outputPath}...`);
+
+            // Setup Progress Bar
+            const progressBar = new cliProgress.SingleBar({
+                format: '🦀 Rendering |' + '{bar}' + '| {percentage}% || {value}/{total} frames || ETA: {eta}s',
+                barCompleteChar: '\u2588',
+                barIncompleteChar: '\u2591',
+                hideCursor: true
+            }, cliProgress.Presets.shades_classic);
+
+            const totalFrames = config.duration * config.fps;
+            progressBar.start(totalFrames, 0);
+
             try {
                 await factory.render(config, clips, outputPath, audioData, scene.images, tempEntryPath, (progress) => {
-                    const label = progress.phase === 'stitching'
-                        ? '🦀 Stitching'
-                        : progress.phase === 'done'
-                            ? '🦀 Complete'
-                            : '🦀 Rendering';
-                    renderCrabProgress(progress.percent, label);
+                    if (progress.phase === 'rendering') {
+                        progressBar.update(progress.completedFrames);
+                    } else if (progress.phase === 'stitching') {
+                        progressBar.update(totalFrames);
+                    }
                 });
-                console.log(`✨ Render complete: ${outputPath}`);
+
+                progressBar.stop();
+                console.log('✨ Stitching and saving...');
+                console.log(`✅ Render complete: ${outputPath}`);
             } finally {
                 if (fs.existsSync(tempEntryPath)) fs.unlinkSync(tempEntryPath);
+                progressBar.stop();
             }
         } catch (err) {
             console.error('❌ Render failed:');
@@ -304,7 +300,7 @@ window.onload = () => {
     // Add clips
     scene.clips.forEach(c => engine.addClip(c));
     if (scene.cameraAnimations) engine.cameraAnimations = scene.cameraAnimations;
-    
+
     // Handle Assets
     const loader = new (window as any).AssetLoader();
     const assetPromises = [];

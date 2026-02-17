@@ -95,7 +95,7 @@ export class MotionFactory {
         await this.serve(clientEntry);
 
         const concurrency = config.concurrency || 1;
-        const totalTicks = config.duration * config.fps;
+        const totalTicks = Math.floor(config.duration * config.fps);
         const chunkSize = Math.ceil(totalTicks / concurrency);
         const tempDir = path.join(process.cwd(), '.claw-temp');
 
@@ -106,6 +106,16 @@ export class MotionFactory {
         let completedFrames = 0;
 
         this.log(`[Factory] Starting parallel render with ${concurrency} workers...`);
+
+        // Initialize progress
+        if (onProgress) {
+            onProgress({
+                phase: 'rendering',
+                completedFrames: 0,
+                totalFrames: totalTicks,
+                percent: 0
+            });
+        }
 
         for (let i = 0; i < concurrency; i++) {
             const startTick = i * chunkSize;
@@ -124,7 +134,7 @@ export class MotionFactory {
                         phase: 'rendering',
                         completedFrames,
                         totalFrames: totalTicks,
-                        percent: Math.min(96, Math.round((completedFrames / Math.max(1, totalTicks)) * 96))
+                        percent: Math.min(99, Math.round((completedFrames / Math.max(1, totalTicks)) * 100))
                     });
                 }
             }));
@@ -136,9 +146,9 @@ export class MotionFactory {
             if (onProgress) {
                 onProgress({
                     phase: 'stitching',
-                    completedFrames,
+                    completedFrames: totalTicks,
                     totalFrames: totalTicks,
-                    percent: 97
+                    percent: 99
                 });
             }
 
@@ -244,6 +254,12 @@ export class MotionFactory {
             const frame = await bridge.captureFrame();
             passThrough.write(frame);
             if (onFrameDone) onFrameDone();
+
+            // CRITICAL FIX: Yield to event loop to allow API polling (Studio UI) to succeed
+            // Without this, the heavy render loop blocks express/vite middlewares
+            if (tick % 2 === 0) {
+                await new Promise(resolve => setTimeout(resolve, 0));
+            }
         }
 
         passThrough.end();
