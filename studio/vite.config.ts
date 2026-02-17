@@ -151,14 +151,18 @@ function workspacePlugin(workspace: string): Plugin {
             });
 
             const tempEntryPath = path.join(process.cwd(), `.claw-studio-entry-${jobId}.ts`);
+            const playerPath = path.resolve(__dirname, '../src/client/Player');
+            const assetLoaderPath = path.resolve(__dirname, '../src/client/AssetLoader');
+            const enginePath = path.resolve(__dirname, '../src/core/Engine');
+            const mathPath = path.resolve(__dirname, '../src/core/Math');
             const blueprintEntries = Object.entries(payload.blueprints || {})
               .map(([name, source]) => `'${name.replace(/'/g, "\\'")}': (${source})`)
               .join(',\n');
             const entryContent = `
-import { ClawPlayer } from './src/client/Player';
-import { AssetLoader } from './src/client/AssetLoader';
-import { ClawEngine } from './src/core/Engine';
-import { ClawMath } from './src/core/Math';
+import { ClawPlayer } from ${JSON.stringify(playerPath)};
+import { AssetLoader } from ${JSON.stringify(assetLoaderPath)};
+import { ClawEngine } from ${JSON.stringify(enginePath)};
+import { ClawMath } from ${JSON.stringify(mathPath)};
 
 (window as any).ClawPlayer = ClawPlayer;
 (window as any).ClawEngine = ClawEngine;
