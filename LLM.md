@@ -74,7 +74,7 @@ export const MyBlueprint = (ctx: BlueprintContext) => {
 
 ---
 
-## 📜 The Scene Format (v0.2.0+)
+## 📜 The Scene Format (v1.0.0+)
 Scenes are defined as TypeScript/JavaScript objects exported as `default`.
 
 ```typescript
