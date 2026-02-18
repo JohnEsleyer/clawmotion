@@ -958,11 +958,22 @@ const App: React.FC = () => {
         exit: clip.exit || { type: 'none', durationTicks: 0 }
       }));
 
-      await fetch('/api/render', {
+      const response = await fetch('/api/render', {
         method: 'POST',
         body: JSON.stringify({ config, clips, outputPath: 'export.mp4' }),
         headers: { 'Content-Type': 'application/json' }
       });
+      
+      const result = await response.json();
+      
+      if (result.success && result.outputPath) {
+        const link = document.createElement('a');
+        link.href = `/preview-assets/${result.outputPath}`;
+        link.download = result.outputPath;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
     } catch (err) {
       console.error("Export failed to start", err);
       eventSource.close();

@@ -82,60 +82,32 @@ export default {
 
 program
     .command('studio')
-    .description('Start ClawStudio in the current directory as workspace')
-    .action(async () => {
-        const workspace = process.cwd();
-        const studioDir = path.resolve(__dirname, '../../studio');
-
-        if (!fs.existsSync(path.join(studioDir, 'package.json'))) {
-            console.error('❌ Studio package not found.');
-            process.exit(1);
-        }
-
+    .description('Start ClawStudio with unified server (studio + render API)')
+    .option('-o, --open', 'Open studio in browser')
+    .action(async (opts) => {
         console.log(`🎬 Starting ClawStudio...`);
-        console.log(`📁 Workspace: ${workspace}`);
+        console.log(`📁 Workspace: ${process.cwd()}`);
+        console.log(`🌐 Studio: http://localhost:3001/`);
 
-        const env = {
-            ...process.env,
-            CLAWMOTION_WORKSPACE: workspace,
-        };
-
-        const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-        const devServer = spawn(npmCmd, ['run', 'dev', '--', '--host', '0.0.0.0'], {
-            cwd: studioDir,
-            stdio: 'inherit',
-            env,
-        });
-
-        const openUrl = () => {
-            const studioUrl = 'http://localhost:5173';
+        if (opts.open) {
             const openCmd = process.platform === 'darwin'
                 ? 'open'
                 : process.platform === 'win32'
                     ? 'start'
                     : 'xdg-open';
-
-            const opener = spawn(openCmd, [studioUrl], {
+            spawn(openCmd, ['http://localhost:3001/'], {
                 stdio: 'ignore',
                 detached: true,
-                shell: process.platform === 'win32',
+                shell: true,
             });
+        } else {
+            console.log(`🌐 Open http://localhost:3001/ in your browser.`);
+        }
 
-            opener.once('error', () => {
-                console.log(`🌐 Open ${studioUrl} in your browser.`);
-            });
-
-            opener.once('spawn', () => {
-                console.log(`🌐 Opened ${studioUrl}`);
-                opener.unref();
-            });
-        };
-
-        setTimeout(openUrl, 2000);
-
-        devServer.on('exit', (code) => {
-            process.exit(code ?? 0);
-        });
+        const { MotionFactory } = require('../server/Factory');
+        const factory = new MotionFactory();
+        await factory.serve();
+        await factory.keepAlive();
     });
 
 program
