@@ -1,4 +1,4 @@
-# 🦀 ClawMotion (v0.2.0)
+# 🦀 ClawMotion (v1.0.0)
 
 [![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](https://opensource.org/licenses/ISC)
 [![Agent-First](https://img.shields.io/badge/AI-Agent--First-blueviolet)](https://github.com/JohnEsleyer/clawmotion)
