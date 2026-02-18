@@ -376,7 +376,9 @@ export class MotionFactory {
         app.use('/preview-assets', express.static(process.cwd()));
         
         app.use(express.static(studioPath));
-        app.use('/studio', express.static(studioPath));
+        app.get('/studio', (req, res) => {
+            res.sendFile(path.join(studioPath, 'index.html'));
+        });
 
         app.get('/', (req, res) => {
             res.sendFile(path.join(studioPath, 'index.html'));
