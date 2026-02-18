@@ -135,10 +135,12 @@ The engine automatically interpolates these values and makes them available in `
 ## 🚀 CLI Usage (LLM Instruction Guide)
 When the user asks to render or preview, prioritize these commands:
 
-- `cmotion init <name>`: Scaffolds a new scene.
-- `cmotion preview <path>`: Opens the real-time browser preview.
-- `cmotion render <path>`: Renders terminal-to-MP4.
-- `cmotion list`: Shows all built-in Pro blueprints.
+- `clawmotion init <name>`: Scaffolds a new scene.
+- `clawmotion preview <path>`: Opens the real-time browser preview.
+- `clawmotion render <path>`: Renders terminal-to-MP4.
+- `clawmotion list`: Shows all built-in Pro blueprints.
+- `clawmotion studio`: Start ClawStudio visual editor.
+- `clawmotion studio -o`: Start studio and open in browser.
 
 ---
 

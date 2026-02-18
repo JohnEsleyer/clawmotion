@@ -7,7 +7,7 @@ ClawStudio is the visual IDE for ClawMotion projects.
 Use the CLI from any directory:
 
 ```bash
-cmotion studio
+clawmotion studio
 ```
 
 The directory where you run the command becomes the Studio workspace. Imported assets are copied to:

@@ -10,7 +10,7 @@ import { ClawConfig, Clip } from '../core/Engine';
 const program = new Command();
 
 program
-    .name('cmotion')
+    .name('clawmotion')
     .description('ClawMotion CLI for programmatic video movement')
     .version('0.1.0');
 
@@ -77,7 +77,7 @@ export default {
 
         console.log(`✅ Scene created at ${sceneFile}`);
         console.log(`\nTo render:`);
-        console.log(`  cmotion render ${name}/scene.ts`);
+        console.log(`  clawmotion render ${name}/scene.ts`);
     });
 
 program

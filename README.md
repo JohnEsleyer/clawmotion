@@ -80,7 +80,7 @@ npx ts-node examples/keyframes.ts
 
 ```bash
 # From any folder - that folder becomes your workspace
-cmotion studio
+clawmotion studio
 
 # Or with explicit workspace
 CLAWMOTION_WORKSPACE=/path/to/folder npm run studio
@@ -204,7 +204,7 @@ clawmotion/
 │   ├── client/         # Player, Compositor, WebCodecs encoder
 │   ├── server/         # Factory, NodeEncoder, FFmpeg
 │   ├── blueprints/     # ProBlueprints library
-│   └── cli/            # cmotion CLI
+│   └── cli/            # clawmotion CLI
 ├── examples/           # Usage examples
 └── studio/             # ClawStudio visual editor
 ```

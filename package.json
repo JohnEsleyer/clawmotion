@@ -32,7 +32,7 @@
     }
   },
   "bin": {
-    "cmotion": "./dist/cli/claw.js"
+    "clawmotion": "./dist/cli/claw.js"
   },
   "scripts": {
     "build": "tsc && cp src/server/preview.html dist/server/ && esbuild dist/client/index.js --bundle --outfile=dist/bundle.js --platform=browser --format=iife",
