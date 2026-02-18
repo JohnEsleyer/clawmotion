@@ -5,11 +5,12 @@ This document provides a comprehensive technical overview of **ClawMotion**, a p
 ---
 
 ## 🏗️ Core Philosophy
-1. **Agent-First**: Designed to be controlled by declarative JSON-like manifests.
-2. **Isomorphic**: The logic core runs identically in the Browser (Canvas 2D) and Node.js (via Puppeteer).
+1. **Agent-First**: Designed to be controlled by declarative manifests.
+2. **Isomorphic**: The logic core runs identically in the Browser and Node.js.
 3. **Mathematical Determinism**: Custom seeded RNG and easing ensure frame-for-frame parity across different renders.
 4. **Deterministic Audio**: Audio is pre-analyzed. Visuals react to baked frequency data (FFT) rather than real-time audio clocks.
-5. **Subpath Partitioning**: Uses professional subpath exports (e.g., `@clawmotion/server`) to prevent browser-side "leakage" of heavy Node dependencies.
+5. **GPU-Native**: Uses WebCodecs (VideoEncoder) in browser for hardware-accelerated encoding.
+6. **Subpath Partitioning**: Uses professional subpath exports (e.g., `@johnesleyer/clawmotion/server`) to prevent browser-side "leakage" of heavy Node dependencies.
 
 ---
 
@@ -19,8 +20,26 @@ ClawMotion uses a single "isomorphic" package with strictly partitioned subpaths
 - **`@johnesleyer/clawmotion`** (Default): Contains the Isomorphic Core (`ClawEngine`, `ClawMath`). Safest for all environments.
 - **`@johnesleyer/clawmotion/core`**: Deep-access to core engine logic.
 - **`@johnesleyer/clawmotion/client`**: Player, AssetLoader, and browser-only rendering logic.
-- **`@johnesleyer/clawmotion/server`**: MotionFactory, Puppeteer bridge, and FFmpeg logic. (Node only).
+- **`@johnesleyer/clawmotion/server`**: MotionFactory, Skia Canvas bridge, and FFmpeg logic. (Node only).
 - **`@johnesleyer/clawmotion/blueprints`**: Direct access to pre-built Pro blueprints.
+
+---
+
+## ⚡ Render Pipeline
+
+### Browser (Preview)
+```
+OffscreenCanvas → VideoEncoder (WebCodecs) → WebM/MP4
+```
+- Uses hardware GPU acceleration (NVENC, Apple Silicon, etc.)
+- Fastest for real-time preview
+
+### Server (Production)
+```
+Skia Canvas → FFmpeg stdin pipe → MP4
+```
+- Headless rendering in Node.js
+- Parallel frame rendering across workers
 
 ---
 
@@ -28,7 +47,7 @@ ClawMotion uses a single "isomorphic" package with strictly partitioned subpaths
 A **Blueprint** is a pure function that draws to a canvas.
 
 ```typescript
-import { BlueprintContext } from '@johnesleyer/clawmotion';
+import { BlueprintContext } from '@johnesleyer/clawmotion/core';
 
 export const MyBlueprint = (ctx: BlueprintContext) => {
     const { width, height, localTime, props, utils } = ctx;
@@ -116,10 +135,10 @@ The engine automatically interpolates these values and makes them available in `
 ## 🚀 CLI Usage (LLM Instruction Guide)
 When the user asks to render or preview, prioritize these commands:
 
-- `claw init <name>`: Scaffolds a new scene.
-- `claw preview <path>`: Opens the real-time browser preview.
-- `claw render <path>`: Renders terminal-to-MP4.
-- `claw list`: Shows all built-in Pro blueprints.
+- `cmotion init <name>`: Scaffolds a new scene.
+- `cmotion preview <path>`: Opens the real-time browser preview.
+- `cmotion render <path>`: Renders terminal-to-MP4.
+- `cmotion list`: Shows all built-in Pro blueprints.
 
 ---
 

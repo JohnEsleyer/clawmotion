@@ -341,16 +341,36 @@ const SegmentModal: React.FC<{
 const ExportProgressModal: React.FC<{ isOpen: boolean; progress: number; done: boolean; onClose: () => void; }> = ({ isOpen, progress, done, onClose }) => {
   if (!isOpen) return null;
   return (
-    <div className="fixed inset-0 z-[220] bg-black/85 p-8 flex items-center justify-center">
-      <div className="bg-[#0f0f1a] border border-slate-700 rounded-2xl w-full max-w-xl p-6 space-y-4">
-        <h3 className="font-bold">Server Rendering Export</h3>
-        <p className="text-xs text-slate-400">Preparing and rendering your timeline on the server.</p>
-        <div className="h-3 bg-slate-900 rounded-full overflow-hidden border border-slate-800">
-          <div className="h-full bg-red-500 transition-all" style={{ width: `${progress}%` }} />
+    <div className="fixed inset-0 z-[220] bg-black/85 p-8 flex items-center justify-center backdrop-blur-sm">
+      <div className="bg-[#0f0f1a] border border-slate-700 rounded-2xl w-full max-w-xl p-8 space-y-6 shadow-2xl">
+        <div className="flex justify-between items-center">
+            <h3 className="font-bold text-xl flex items-center gap-2">
+                {done ? <span className="text-green-500">✔</span> : <LoaderCircle className="animate-spin text-cyan-400"/>}
+                {done ? 'Export Complete' : 'Rendering Video...'}
+            </h3>
+            <span className="text-mono text-slate-400">{progress}%</span>
         </div>
-        <div className="text-xs font-mono text-right">{progress}%</div>
-        <div className="flex justify-end">
-          <button onClick={onClose} disabled={!done} className="px-4 py-2 text-xs rounded bg-red-600 disabled:opacity-40">{done ? 'Close' : 'Rendering...'}</button>
+        
+        <div className="h-4 bg-slate-900 rounded-full overflow-hidden border border-slate-800 relative">
+          <div 
+            className="h-full bg-gradient-to-r from-cyan-500 to-blue-600 transition-all duration-300 ease-out" 
+            style={{ width: `${progress}%` }} 
+          />
+          <div className="absolute inset-0 bg-white/10 w-full" style={{ transform: `translateX(${progress - 100}%)` }}></div>
+        </div>
+        
+        <p className="text-xs text-slate-400 text-center">
+            {done ? 'Video saved to project folder.' : 'Processing frames on server. Please wait.'}
+        </p>
+
+        <div className="flex justify-end pt-2">
+          <button 
+            onClick={onClose} 
+            disabled={!done} 
+            className="px-6 py-2 text-sm rounded bg-slate-800 hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          >
+            Close
+          </button>
         </div>
       </div>
     </div>
@@ -888,17 +908,68 @@ const App: React.FC = () => {
     setSelectedSegmentId(seg.id);
   };
 
-  const handleExport = () => {
+  const handleExport = async () => {
     setShowExportModal(true);
-    setExportProgress(3);
-  };
+    setExportProgress(0);
 
-  useEffect(() => {
-    if (!showExportModal) return;
-    if (exportProgress >= 100) return;
-    const t = setTimeout(() => setExportProgress((prev) => Math.min(100, prev + Math.max(3, Math.round((100 - prev) * 0.18)))), 350);
-    return () => clearTimeout(t);
-  }, [showExportModal, exportProgress]);
+    const eventSource = new EventSource('/events/render-progress');
+
+    eventSource.onopen = () => {
+      console.log("SSE Connected");
+    };
+
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.connected) return;
+        
+        setExportProgress(data.percent);
+        
+        if (data.percent >= 100) {
+          eventSource.close();
+        }
+      } catch (e) {
+        console.error("SSE Parse Error", e);
+      }
+    };
+
+    eventSource.onerror = (err) => {
+      console.log("SSE connection closed or error");
+      eventSource.close();
+    };
+
+    try {
+      const config = {
+        width: selectedSize.width,
+        height: selectedSize.height,
+        fps: 30,
+        duration: duration,
+        concurrency: 4
+      };
+
+      const clips = (studioEngineRef.current?.getState().clips || []).map((clip: any) => ({
+        id: clip.id,
+        blueprintId: clip.blueprintId,
+        startTick: clip.startTick,
+        durationTicks: clip.durationTicks,
+        layer: clip.layer,
+        props: clip.props || {},
+        entry: clip.entry || { type: 'none', durationTicks: 0 },
+        exit: clip.exit || { type: 'none', durationTicks: 0 }
+      }));
+
+      await fetch('/api/render', {
+        method: 'POST',
+        body: JSON.stringify({ config, clips, outputPath: 'export.mp4' }),
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (err) {
+      console.error("Export failed to start", err);
+      eventSource.close();
+      setShowExportModal(false);
+      alert("Failed to start export server");
+    }
+  };
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-[#0a0a0f] text-slate-200">

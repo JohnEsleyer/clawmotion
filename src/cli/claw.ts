@@ -223,10 +223,20 @@ import scene from '${relativeScenePath}';
 `;
             fs.writeFileSync(tempEntryPath, entryContent);
 
+            const startTimestamp = Date.now();
+
+            const totalFrames = Math.ceil(config.duration * config.fps);
+            let lastPercent = -1;
+
             console.log(`🚀 Starting render to ${outputPath}...`);
+
             try {
-                await factory.render(config, clips, outputPath, audioData, scene.images, tempEntryPath);
-                console.log(`✨ Render complete: ${outputPath}`);
+                await factory.renderNode(config, clips, outputPath);
+                
+                const duration = ((Date.now() - startTimestamp) / 1000).toFixed(2);
+                console.log(`✨ Render complete: ${outputPath} in ${duration}s`);
+            } catch(e) {
+                throw e;
             } finally {
                 if (fs.existsSync(tempEntryPath)) fs.unlinkSync(tempEntryPath);
             }
@@ -311,7 +321,7 @@ window.onload = () => {
             console.log(`\n🚀 Preview server running at http://localhost:3001`);
             console.log(`Press Ctrl+C to stop`);
 
-            // Keep process alive
+            await factory.keepAlive();
         } catch (err) {
             console.error('❌ Preview failed:');
             console.error(err);

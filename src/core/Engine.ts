@@ -2,6 +2,7 @@ import { BlueprintRegistry } from './Blueprint';
 import { BlueprintContext } from './Context';
 import { ClawMath, Easing } from './Math';
 import { ClawAnimator } from './Animator';
+import { createClawCanvas, IClawCanvas, ClawContext2D } from './ClawCanvas';
 
 export interface CameraConfig {
     x?: number;
@@ -53,9 +54,12 @@ export class ClawEngine {
     public config: ClawConfig;
     public registry: BlueprintRegistry;
     public clips: Clip[] = [];
-    public audioData: Map<string, any[]> = new Map(); // trackId -> Array of FrameData
+    public audioData: Map<string, any[]> = new Map();
     public assets: Map<string, any> = new Map();
     public cameraAnimations: Record<string, Keyframe[]> = {};
+
+    public canvas: IClawCanvas | null = null;
+    public ctx: ClawContext2D | null = null;
 
     private math: ClawMath;
 
@@ -63,6 +67,11 @@ export class ClawEngine {
         this.config = config;
         this.registry = new BlueprintRegistry();
         this.math = new ClawMath();
+    }
+
+    public async init() {
+        this.canvas = await createClawCanvas(this.config.width, this.config.height);
+        this.ctx = this.canvas.getContext('2d');
     }
 
     /**
@@ -295,6 +304,18 @@ export class ClawEngine {
 
         // Restore global camera
         ctx.restore();
+    }
+
+    public renderToInternalCanvas(tick: number) {
+        if (!this.ctx || !this.canvas) {
+            throw new Error("Engine not initialized. Call init() first.");
+        }
+        this.render(tick, this.ctx);
+    }
+
+    public getImageData(): ImageData | null {
+        if (!this.ctx || !this.canvas) return null;
+        return this.ctx.getImageData(0, 0, this.canvas.width, this.canvas.height);
     }
 
     /**

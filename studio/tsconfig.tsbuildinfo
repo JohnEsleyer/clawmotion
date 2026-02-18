@@ -1,0 +1,1 @@
+{"root":["./src/App.tsx","./src/constants.ts","./src/main.tsx","./src/test.ts","./src/types.ts","./src/client/index.ts","./src/core/Engine.ts","./src/services/engine.ts","./src/services/formatter.ts","./src/services/geminiService.ts"],"errors":true,"version":"5.9.3"}

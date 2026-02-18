@@ -5,8 +5,7 @@ import type { Clip, ClawConfig } from "@core/Engine";
 import { ClawPlayer } from "@client/Player";
 
 export type { Clip, ClawConfig };
-export { ClawEngine };
-export { ClawPlayer };
+export { ClawEngine, ClawPlayer, StudioEngine };
 
 export interface ScheduledClip {
     filename: string;
@@ -123,7 +122,7 @@ export async function analyzeAudioFile(file: File): Promise<AudioMetadata> {
     };
 }
 
-export class StudioEngine {
+class StudioEngine {
     public engine: ClawEngine;
     private player: ClawPlayer | null = null;
     private durationSeconds: number;

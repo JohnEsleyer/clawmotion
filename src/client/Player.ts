@@ -13,6 +13,7 @@ export class ClawPlayer {
     private startTime: number = 0;
     private currentTick: number = 0;
     private animationFrameId: number | null = null;
+    private previewCanvas: HTMLCanvasElement | null = null;
 
     constructor(container: HTMLElement | string, engine: ClawEngine) {
         if (typeof container === 'string') {
@@ -25,10 +26,8 @@ export class ClawPlayer {
 
         this.engine = engine;
 
-        // 1. Setup Compositor (WebGL)
         this.compositor = new Compositor(engine.config.width, engine.config.height);
 
-        // 2. Setup PostProcessor and add its canvas to the DOM
         this.postProcessor = new PostProcessor(engine.config.width, engine.config.height);
         const outputCanvas = this.postProcessor.getCanvas();
         outputCanvas.style.display = 'block';
@@ -43,8 +42,11 @@ export class ClawPlayer {
         this.container.style.justifyContent = 'center';
         this.container.appendChild(outputCanvas);
 
-        // Initial render
         this.render();
+    }
+
+    public async init() {
+        await this.engine.init();
     }
 
     private getOrLayerCanvas(id: string): HTMLCanvasElement {
@@ -85,7 +87,7 @@ export class ClawPlayer {
         if (!this.isPlaying) return;
 
         const now = performance.now();
-        const elapsed = (now - this.startTime) / 1000; // seconds
+        const elapsed = (now - this.startTime) / 1000;
         const expectedTick = Math.floor(elapsed * this.engine.config.fps);
 
         if (expectedTick > this.currentTick) {
@@ -95,21 +97,60 @@ export class ClawPlayer {
 
         if (this.currentTick >= this.engine.toTicks(this.engine.config.duration)) {
             this.pause();
-            return; // Stop at end
+            return;
         }
 
         this.animationFrameId = requestAnimationFrame(this.loop);
     };
 
+    private async renderWithInternalCanvas() {
+        if (!this.engine.canvas || !this.engine.ctx) {
+            await this.engine.init();
+        }
+
+        this.engine.renderToInternalCanvas(this.currentTick);
+
+        const canvas = this.engine.canvas as any;
+        if (canvas.transferToImageBitmap) {
+            const bitmap = canvas.transferToImageBitmap();
+            if (!this.previewCanvas) {
+                this.previewCanvas = document.createElement('canvas');
+                this.previewCanvas.width = this.engine.config.width;
+                this.previewCanvas.height = this.engine.config.height;
+                this.container.innerHTML = '';
+                this.container.appendChild(this.previewCanvas);
+            }
+            const ctx = this.previewCanvas.getContext('2d');
+            if (ctx) {
+                (ctx as any).transferFromImageBitmap(bitmap);
+            }
+        } else if (canvas.rawCanvas) {
+            if (!this.previewCanvas) {
+                this.previewCanvas = document.createElement('canvas');
+                this.previewCanvas.width = this.engine.config.width;
+                this.previewCanvas.height = this.engine.config.height;
+                this.container.innerHTML = '';
+                this.container.appendChild(this.previewCanvas);
+            }
+            const ctx = this.previewCanvas.getContext('2d');
+            if (ctx) {
+                ctx.drawImage(canvas.rawCanvas, 0, 0);
+            }
+        }
+    }
+
     private async render() {
-        // 1. Identify active video clips and seek them
+        if (this.engine.canvas && this.engine.ctx) {
+            await this.renderWithInternalCanvas();
+            return;
+        }
+
         const activeClips = this.engine.clips.filter(c =>
             this.currentTick >= c.startTick &&
             this.currentTick < (c.startTick + c.durationTicks)
         );
 
         const videoSyncs = activeClips.map(async (clip) => {
-            const blueprint = this.engine.registry.get(clip.blueprintId);
             if (clip.blueprintId === 'video' || (clip.props?.assetId && clip.props.assetId.endsWith('.mp4'))) {
                 const video = this.engine.assets.get(clip.props?.assetId) as HTMLVideoElement;
                 if (video && video.tagName === 'VIDEO') {
@@ -128,13 +169,11 @@ export class ClawPlayer {
 
         await Promise.all(videoSyncs);
 
-        // 2. Render all active clips into their own canvases
         const layerData = this.engine.renderToLayers(this.currentTick, (clip: Clip) => {
             const canvas = this.getOrLayerCanvas(clip.id);
             return canvas.getContext('2d');
         });
 
-        // 3. Composite layers using WebGL
         const compositeLayers: LayerData[] = layerData.map(l => ({
             source: this.layerCanvases.get(l!.clip.id)!,
             opacity: l!.opacity,
@@ -144,11 +183,9 @@ export class ClawPlayer {
 
         this.compositor.composite(compositeLayers);
 
-        // 4. Apply Post-Processing to the composited result
         const effects = (this.engine.config as any).effects || {};
         this.postProcessor.render(this.compositor.getCanvas(), effects);
 
-        // Sync Audio if available
         const audioAsset = this.engine.assets.get('main-audio') as HTMLAudioElement;
         if (audioAsset) {
             if (this.isPlaying) {

@@ -1,0 +1,1 @@
+export { ClawPlayer } from './index';

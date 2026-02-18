@@ -2,6 +2,7 @@ export * from './Player';
 export * from './AssetLoader';
 export * from './PostProcessor';
 export * from './Compositor';
+export * from './WebCodecsEncoder';
 
 import { ClawPlayer } from './Player';
 import { AssetLoader } from './AssetLoader';

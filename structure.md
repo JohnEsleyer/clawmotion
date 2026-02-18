@@ -13,6 +13,10 @@ This file provides a quick reference for locating specific implementations withi
 | Timeline Logic | `src/core/Engine.ts` |
 | Blueprint Registry | `src/core/Blueprint.ts` |
 | Render Context | `src/core/Context.ts` |
+| ClawCanvas (Browser/Node) | `src/core/ClawCanvas.ts` |
+| Deterministic Math | `src/core/Math.ts` |
+| Animation Helpers | `src/core/Animator.ts` |
+| Audio Triggers | `src/core/AudioTrigger.ts` |
 
 ---
 
@@ -24,6 +28,7 @@ This file provides a quick reference for locating specific implementations withi
 | Compositor | `src/client/Compositor.ts` |
 | Asset Loader | `src/client/AssetLoader.ts` |
 | Post Processor | `src/client/PostProcessor.ts` |
+| WebCodecs Encoder | `src/client/WebCodecsEncoder.ts` |
 | Client Entry | `src/client/index.ts` |
 
 ---
@@ -33,7 +38,7 @@ This file provides a quick reference for locating specific implementations withi
 | Implementation | Location |
 |---------------|----------|
 | Motion Factory | `src/server/Factory.ts` |
-| Puppeteer Bridge | `src/server/PuppeteerBridge.ts` |
+| Skia Canvas Bridge | `src/server/NodeEncoder.ts` |
 | Audio Analyzer | `src/server/AudioAnalyzer.ts` |
 | Preview HTML | `src/server/preview.html` |
 | Server Entry | `src/server/index.ts` |
@@ -71,14 +76,5 @@ This file provides a quick reference for locating specific implementations withi
 - **`MotionFactory`** (`src/server/Factory.ts`) - Server-side rendering
 - **`Compositor`** (`src/client/Compositor.ts`) - Layer composition
 - **`AudioAnalyzer`** (`src/server/AudioAnalyzer.ts`) - FFT audio analysis
-- **`PuppeteerBridge`** (`src/server/PuppeteerBridge.ts`) - Browser frame capture
-
----
-
-## Utilities
-
-| Implementation | Location |
-|---------------|----------|
-| Deterministic Math | `src/core/Math.ts` |
-| Animation Helpers | `src/core/Animator.ts` |
-| Audio Triggers | `src/core/AudioTrigger.ts` |
+- **`NodeEncoder`** (`src/server/NodeEncoder.ts`) - Skia Canvas to FFmpeg bridge
+- **`WebCodecsEncoder`** (`src/client/WebCodecsEncoder.ts`) - Hardware-accelerated browser encoding
