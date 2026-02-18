@@ -60,13 +60,27 @@ export class MotionFactory {
         console.error(`[Factory] Registered ${Object.keys(ProBlueprints).length} blueprints`);
     }
 
-    public async renderNode(config: ClawConfig, clips: Clip[], outputPath: string, onProgress?: (frame: number, total: number) => void) {
+    public async renderNode(config: ClawConfig, clips: Clip[], outputPath: string, onProgress?: (frame: number, total: number) => void, customBlueprints?: Record<string, string>) {
         console.error(`[Factory] Starting Node.js Render: ${config.width}x${config.height} @ ${config.fps}fps`);
 
         const engine = new ClawEngine(config);
         await engine.init();
         
         this.registerBlueprints(engine);
+
+        if (customBlueprints) {
+            console.error(`[Factory] Loading ${Object.keys(customBlueprints).length} custom blueprints...`);
+            Object.entries(customBlueprints).forEach(([id, code]) => {
+                try {
+                    const blueprintFn = eval(`(${code})`);
+                    if (typeof blueprintFn === 'function') {
+                        engine.registry.register(id, blueprintFn);
+                    }
+                } catch (e) {
+                    console.error(`[Factory] Failed to register blueprint '${id}':`, e);
+                }
+            });
+        }
 
         clips.forEach(c => engine.addClip(c));
 
@@ -374,7 +388,7 @@ export class MotionFactory {
 
         app.post('/api/render', async (req, res) => {
             try {
-                const { config, clips, outputPath } = req.body;
+                const { config, clips, blueprints, outputPath } = req.body;
                 console.log('[Factory] Received render request');
                 
                 const startTime = Date.now();
@@ -386,7 +400,7 @@ export class MotionFactory {
                     if (frame % 5 === 0 || frame === total - 1) {
                         broadcastProgress({ frame, total, percent, elapsed });
                     }
-                });
+                }, blueprints);
                 
                 broadcastProgress({ frame: 0, total: 0, percent: 100, elapsed: '0' });
 

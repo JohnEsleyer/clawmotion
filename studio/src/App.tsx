@@ -958,9 +958,14 @@ const App: React.FC = () => {
         exit: clip.exit || { type: 'none', durationTicks: 0 }
       }));
 
+      const blueprints: Record<string, string> = {};
+      files.filter(f => f.type === 'clip').forEach(f => {
+        blueprints[f.name] = f.code;
+      });
+
       const response = await fetch('/api/render', {
         method: 'POST',
-        body: JSON.stringify({ config, clips, outputPath: 'export.mp4' }),
+        body: JSON.stringify({ config, clips, blueprints, outputPath: 'export.mp4' }),
         headers: { 'Content-Type': 'application/json' }
       });
       
