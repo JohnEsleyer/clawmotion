@@ -5,107 +5,116 @@ This document provides a comprehensive technical overview of **ClawMotion**, a p
 ---
 
 ## 🏗️ Core Philosophy
-1. **Agent-First**: Designed to be controlled by declarative manifests.
-2. **Isomorphic**: The logic core runs identically in the Browser and Node.js.
-3. **Mathematical Determinism**: Custom seeded RNG and easing ensure frame-for-frame parity across different renders.
-4. **Deterministic Audio**: Audio is pre-analyzed. Visuals react to baked frequency data (FFT) rather than real-time audio clocks.
-5. **GPU-Native**: Uses WebCodecs (VideoEncoder) in browser for hardware-accelerated encoding.
-6. **Subpath Partitioning**: Uses professional subpath exports (e.g., `@johnesleyer/clawmotion/server`) to prevent browser-side "leakage" of heavy Node dependencies.
+1. **Agent-First**: Designed to be controlled by declarative manifests and typed blueprints with Zod schema validation.
+2. **Isomorphic**: The logic core runs identically in Browser, Node.js, and Bun.
+3. **Mathematical Determinism**: Custom seeded RNG and analytical math solver ensure frame-for-frame parity across renders.
+4. **Deterministic Audio**: Audio is pre-analyzed into FFT frequency data so visuals react to frame-accurate audio bins without clock drift.
+5. **GPU-Native / Headless**: Hardware-accelerated WebCodecs encoding in browser or high-performance Skia Canvas C++ bindings piped to FFmpeg in Node/Bun.
+6. **Subpath Partitioning**: Subpaths (`@johnesleyer/clawmotion/core`, `@johnesleyer/clawmotion/client`, `@johnesleyer/clawmotion/server`, `@johnesleyer/clawmotion/blueprints`) prevent browser-side bundle leakage.
 
 ---
 
 ## 🏗️ Architecture & Subpaths
-ClawMotion uses a single "isomorphic" package with strictly partitioned subpaths to maintain a lightweight footprint in the browser.
 
-- **`@johnesleyer/clawmotion`** (Default): Contains the Isomorphic Core (`ClawEngine`, `ClawMath`). Safest for all environments.
-- **`@johnesleyer/clawmotion/core`**: Deep-access to core engine logic.
-- **`@johnesleyer/clawmotion/client`**: Player, AssetLoader, and browser-only rendering logic.
-- **`@johnesleyer/clawmotion/server`**: MotionFactory, Skia Canvas bridge, and FFmpeg logic. (Node only).
-- **`@johnesleyer/clawmotion/blueprints`**: Direct access to pre-built Pro blueprints.
-
----
-
-## ⚡ Render Pipeline
-
-### Browser (Preview)
-```
-OffscreenCanvas → VideoEncoder (WebCodecs) → WebM/MP4
-```
-- Uses hardware GPU acceleration (NVENC, Apple Silicon, etc.)
-- Fastest for real-time preview
-
-### Server (Production)
-```
-Skia Canvas → FFmpeg stdin pipe → MP4
-```
-- Headless rendering in Node.js
-- Parallel frame rendering across workers
+- **`@johnesleyer/clawmotion`**: Main package entry point.
+- **`@johnesleyer/clawmotion/core`**: Core engine (`ClawEngine`, `defineBlueprint`, `BlueprintRegistry`, `ClawMath`, `ClawAnimator`, `AudioTrigger`).
+- **`@johnesleyer/clawmotion/client`**: Client player & WebCodecs browser logic (`ClawPlayer`, `Compositor`, `AssetLoader`, `PostProcessor`, `WebCodecsEncoder`).
+- **`@johnesleyer/clawmotion/server`**: Server-side render factory & audio processing (`MotionFactory`, `AudioAnalyzer`, `NodeEncoder`).
+- **`@johnesleyer/clawmotion/blueprints`**: Built-in Pro blueprints (`ProBlueprints`).
 
 ---
 
-## 📐 The Blueprint Pattern
-A **Blueprint** is a pure function that draws to a canvas.
+## 📐 The Blueprint API
+
+A **Blueprint** draws to a canvas context for a given frame.
+
+### 1. Schema-Validated Blueprints (`defineBlueprint`)
+Prefer using `defineBlueprint` with a Zod schema for AI tool usage and automatic prop validation:
 
 ```typescript
-import { BlueprintContext } from '@johnesleyer/clawmotion/core';
+import { defineBlueprint } from '@johnesleyer/clawmotion/core';
+import { z } from 'zod';
 
-export const MyBlueprint = (ctx: BlueprintContext) => {
-    const { width, height, localTime, props, utils } = ctx;
-    
-    // localTime: 0.0 (start of clip) to 1.0 (end of clip)
-    const x = utils.range(0, width) * localTime; 
-    
-    ctx.ctx.fillStyle = props.color || 'white';
-    ctx.ctx.fillRect(x, height / 2, 100, 100);
-};
+export const SpringBox = defineBlueprint({
+    id: 'spring-box',
+    description: 'A box that animates scale using analytical spring physics',
+    schema: z.object({
+        color: z.string().default('#22d3ee').describe('CSS color of the box'),
+        stiffness: z.number().default(180).describe('Spring stiffness constant'),
+        boxSize: z.number().default(120).describe('Width and height in pixels')
+    }),
+    run: (ctx) => {
+        const { ctx: c, width, height, time, utils, props } = ctx;
+
+        // props is typed and validated with default values applied
+        const scale = utils.spring({
+            from: 0,
+            to: 1,
+            time: time,
+            stiffness: props.stiffness
+        });
+
+        c.save();
+        c.translate(width / 2, height / 2);
+        c.scale(scale, scale);
+        c.fillStyle = props.color;
+        c.fillRect(-props.boxSize / 2, -props.boxSize / 2, props.boxSize, props.boxSize);
+        c.restore();
+    }
+});
 ```
 
-### Context API (`BlueprintContext`)
-| Property | Description |
-| :--- | :--- |
-| `ctx` | `CanvasRenderingContext2D` |
-| `localTime` | Progressive value (0-1) for the current clip duration. |
-| `tick` | The global frame index. |
-| `width / height` | Canvas dimensions. |
-| `utils` | Instance of `ClawMath` (seeded RNG, lerp, clamp). |
-| `props` | Custom parameters passed from the manifest. |
-| `audio` | `{ volume: number, frequencies: number[] }` (if enabled). |
-| `getAsset(id)` | Retrieves pre-loaded `Image` or `HTMLVideoElement`. |
+### 2. Context API (`BlueprintContext`)
+| Property | Type | Description |
+| :--- | :--- | :--- |
+| `ctx` | `ClawContext2D` | 2D Canvas drawing context. |
+| `localTime` | `number` | Clip progress from `0.0` (start) to `1.0` (end). |
+| `time` | `number` | Total global time in seconds. |
+| `tick` | `number` | Global frame index. |
+| `width / height` | `number` | Canvas dimensions. |
+| `utils` | `ClawMath` | Deterministic math (`random()`, `range()`, `spring()`, `easeInOutQuad()`). |
+| `props` | `Record<string, any>` | Merged static props and keyframe values. |
+| `audio` | `{ volume, frequencies }` | Pre-baked RMS volume and FFT frequencies array (if audio present). |
+| `getAsset(id)` | `function` | Retrieves pre-loaded image/video element (`HTMLImageElement` / `HTMLVideoElement`). |
 
 ---
 
-## 📜 The Scene Format (v1.0.0+)
-Scenes are defined as TypeScript/JavaScript objects exported as `default`.
+## 📜 The Scene Format
+Scenes are TypeScript/JavaScript files exporting a default scene object.
 
 ```typescript
+import { SpringBox } from './blueprints/SpringBox';
+
 export default {
     config: {
-        width: 1920,
-        height: 1080,
-        fps: 60,
-        duration: 10,
-        concurrency: 8, // Parallel render workers
-        camera: { zoom: 1.2, x: 0, y: 0 }
+        width: 1280,
+        height: 720,
+        fps: 30,
+        duration: 5,
+        concurrency: 4,
+        camera: { zoom: 1.0, x: 0, y: 0, shake: 0.0 }
     },
     blueprints: {
-        'my-animation': MyBlueprint
+        'spring-box': SpringBox
     },
     clips: [
         {
-            id: 'intro',
-            blueprintId: 'my-animation',
+            id: 'box-clip',
+            blueprintId: 'spring-box',
             startTick: 0,
-            durationTicks: 120,
-            props: { color: '#ff0055' },
+            durationTicks: 150,
+            layer: 1,
+            blendMode: 'normal', // 'normal' | 'multiply' | 'screen' | 'overlay' | 'add'
+            props: { color: '#ec4899', stiffness: 220 },
             entry: { type: 'fade', durationTicks: 30 },
             exit: { type: 'zoom', durationTicks: 30 }
         }
     ],
     audio: {
-        'main': './background-music.mp3'
+        'main': './assets/music.mp3'
     },
     images: {
-        'logo': './assets/logo.png'
+        'hero-img': './assets/hero.png'
     }
 };
 ```
@@ -113,69 +122,83 @@ export default {
 ---
 
 ## ⚡ Animation System
-ClawMotion supports **keyframe-based** property interpolation or **time-based** manual drawing.
 
 ### Keyframes
-Animations can be declared in the clip manifest:
+Clips support property keyframes with custom easing functions:
 ```typescript
 clips: [{
     // ...
     animations: {
-        x: [
-            { tick: 0, value: 0, easing: 'easeOutQuad' },
-            { tick: 60, value: 500 }
+        fontSize: [
+            { tick: 0, value: 40 },
+            { tick: 45, value: 120, easing: 'easeOutQuad' },
+            { tick: 90, value: 80, easing: 'easeInOutQuad' }
         ]
     }
 }]
 ```
-The engine automatically interpolates these values and makes them available in `ctx.props`.
+Supported easings: `linear`, `easeInQuad`, `easeOutQuad`, `easeInOutQuad`, `easeInCubic`, `easeOutCubic`, `easeInOutCubic`, `easeInExpo`, `easeOutExpo`.
+
+### Analytical Spring Physics
+Compute exact closed-form spring position without frame-stepping history:
+```typescript
+const value = ctx.utils.spring({
+    from: 0,
+    to: 100,
+    time: ctx.time,
+    stiffness: 180, // k
+    damping: 12,    // c
+    mass: 1,        // m
+    velocity: 0
+});
+```
+
+### Camera Motion
+Control camera zoom, panning, and shake globally or via keyframes:
+```typescript
+cameraAnimations: {
+    zoom: [
+        { tick: 0, value: 1.0 },
+        { tick: 150, value: 1.4, easing: 'easeInOutQuad' }
+    ],
+    shake: [
+        { tick: 45, value: 0.8 },
+        { tick: 75, value: 0.0, easing: 'easeOutQuad' }
+    ]
+}
+```
 
 ---
 
-## 🚀 CLI Usage (LLM Instruction Guide)
-When the user asks to render or preview, prioritize these commands:
+## 🚀 CLI Commands (LLM Reference)
 
-- `clawmotion init <name>`: Scaffolds a new scene.
-- `clawmotion preview <path>`: Opens the real-time browser preview.
-- `clawmotion render <path>`: Renders terminal-to-MP4.
-- `clawmotion list`: Shows all built-in Pro blueprints.
-- `clawmotion studio`: Start ClawStudio visual editor.
-- `clawmotion studio -o`: Start studio and open in browser.
+When generating actions or instructions for users, use these CLI commands:
+
+- `clawmotion init <name>`: Scaffolds a new scene directory with sample blueprint.
+- `clawmotion preview <file>`: Launches the real-time browser preview player.
+- `clawmotion render <file> [-o output.mp4] [-p concurrency]`: Renders scene to MP4.
+- `clawmotion audit <file> [-o outDir] [-r ratios]`: Generates PNG snapshot keyframes and JSON report for Multimodal Vision models (GPT-4o, Gemini).
+- `clawmotion schemas [file]`: Outputs JSON tool schemas of registered blueprints for LLM Function Calling.
+- `clawmotion list`: Lists built-in Pro blueprints.
+- `clawmotion serve`: Runs the render API server.
 
 ---
 
 ## 💎 Pro Blueprints
-Built-in high-quality blueprints:
-- `gradient-bg`: Dynamic linear/radial backgrounds.
-- `text-hero`: Premium typography with shadows and entry motion.
-- `floaty-blobs`: Deterministic particles.
-- `glass-card`: Glassmorphism effect UI.
-- `vignette`: Cinematic corners.
-- `video`: High-performance video background/overlay.
+Built-in high-quality blueprints in `@johnesleyer/clawmotion/blueprints`:
+- `gradient-bg`: Dynamic linear/radial backgrounds (`color1`, `color2`, `color3`).
+- `text-hero`: Premium typography with shadows and drop-in motion (`text`, `fontSize`).
+- `floaty-blobs`: Deterministic particles (`count`, `color`, `seed`).
+- `image`: Hardware image drawing with scale animations (`assetId`, `x`, `y`, `width`, `height`).
+- `glass-card`: Glassmorphism card container (`title`, `subtitle`, `x`, `y`, `w`, `h`).
+- `vignette`: Cinematic corner shading (`intensity`, `color`).
+- `video`: Frame-accurate background video clip playback (`assetId`, `width`, `height`).
 
 ---
 
-## 🛠️ Common Patterns & Tips
+## 🤖 AI Agent Workflow
 
-### 1. Deterministic Randomness
-Never use `Math.random()`. Always use `ctx.utils.random()`.
-```typescript
-const jitter = ctx.utils.range(-5, 5); // Consistent across every render
-```
-
-### 2. Audio Reactivity
-Use `ctx.audio.frequencies` (array of normalized floats).
-```typescript
-const bass = ctx.audio.frequencies[0]; // 0.0 to 1.0
-const size = 100 + (bass * 50);
-```
-
-### 3. Layering
-Clips are sorted by `layer` (default 0). Higher layers render on top.
-```typescript
-{ id: 'bg', layer: -1, ... },
-{ id: 'overlay', layer: 10, ... }
-```
-
-### 4. Transitions
-Transitions (`entry`, `exit`) are handled automatically by the engine. The `localTime` and `opacity` are pre-calculated. Do not manually interpolate unless you need custom exotic logic.
+1. **Extract Schemas**: Run `clawmotion schemas` to fetch tool definitions for prompt construction.
+2. **Generate Scene & Blueprints**: Output valid TypeScript files with `defineBlueprint` and standard scene default export.
+3. **Execute Preview / Render**: Run `clawmotion preview` or `clawmotion render`.
+4. **Audit Visuals**: Execute `clawmotion audit` and analyze `.claw-audit/audit-report.json` and generated PNG snapshots using a vision model to verify layout, contrast, and alignment.
