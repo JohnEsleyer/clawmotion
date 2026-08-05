@@ -81,28 +81,12 @@ export default {
     });
 
 program
-    .command('studio')
-    .description('Start ClawStudio with unified server (studio + render API)')
-    .option('-o, --open', 'Open studio in browser')
-    .action(async (opts) => {
-        console.log(`🎬 Starting ClawStudio...`);
-        console.log(`📁 Workspace: ${process.cwd()}`);
-        console.log(`🌐 Studio: http://localhost:3001/`);
-
-        if (opts.open) {
-            const openCmd = process.platform === 'darwin'
-                ? 'open'
-                : process.platform === 'win32'
-                    ? 'start'
-                    : 'xdg-open';
-            spawn(openCmd, ['http://localhost:3001/'], {
-                stdio: 'ignore',
-                detached: true,
-                shell: true,
-            });
-        } else {
-            console.log(`🌐 Open http://localhost:3001/ in your browser.`);
-        }
+    .command('serve')
+    .description('Start the ClawMotion render server')
+    .action(async () => {
+        console.log(`Starting ClawMotion server...`);
+        console.log(`Workspace: ${process.cwd()}`);
+        console.log(`Server: http://localhost:3001/`);
 
         const { MotionFactory } = require('../server/Factory');
         const factory = new MotionFactory();
@@ -126,17 +110,18 @@ program
         console.log(`🎬 Loading scene: ${file}...`);
 
         try {
-            // Use ts-node to register and load the TS file
-            require('ts-node').register({
-                transpileOnly: true,
-                compilerOptions: {
-                    module: 'commonjs',
-                    target: 'esnext'
-                }
-            });
-
-            const sceneModule = require(absoluteFilePath);
-            const scene = sceneModule.default;
+            // Load the scene file — Bun loads .ts natively, Node needs ts-node
+            let sceneModule: any;
+            if (typeof Bun !== 'undefined') {
+                sceneModule = await import(absoluteFilePath);
+            } else {
+                require('ts-node').register({
+                    transpileOnly: true,
+                    compilerOptions: { module: 'commonjs', target: 'esnext' }
+                });
+                sceneModule = require(absoluteFilePath);
+            }
+            const scene = sceneModule.default || sceneModule;
 
             if (!scene || !scene.config || !scene.clips) {
                 console.log('ℹ️ No scene definition found (export default { config, clips, ... }).');
@@ -233,7 +218,15 @@ program
         console.log(`👁️ Previewing scene: ${file}...`);
 
         try {
-            require('ts-node').register({ transpileOnly: true });
+            // Load the scene file — Bun loads .ts natively, Node needs ts-node
+            let sceneModule: any;
+            if (typeof Bun !== 'undefined') {
+                sceneModule = await import(absoluteFilePath);
+            } else {
+                require('ts-node').register({ transpileOnly: true });
+                sceneModule = require(absoluteFilePath);
+            }
+            const scene = sceneModule.default || sceneModule;
             const factory = new MotionFactory();
 
             const tempEntryPath = path.join(process.cwd(), '.claw-temp-entry.ts');
@@ -242,10 +235,6 @@ program
             const srcPath = path.join(process.cwd(), 'src');
             const isDev = fs.existsSync(srcPath);
             const corePath = isDev ? './src' : '@johnesleyer/clawmotion';
-
-            // Load scene primarily to get the config
-            const sceneModule = require(absoluteFilePath);
-            const scene = sceneModule.default || sceneModule;
 
             const entryContent = `
 import { ClawPlayer } from '${corePath}/client/Player';
@@ -310,6 +299,90 @@ program
         Object.keys(ProBlueprints).forEach(id => {
             console.log(`  - ${id}`);
         });
+    });
+
+program
+    .command('audit')
+    .description('Generate keyframe PNG snapshots and JSON report for Vision Models & LLMs')
+    .argument('<file>', 'Path to the scene .ts or .js file')
+    .option('-o, --outDir <dir>', 'Output directory for snapshots', '.claw-audit')
+    .option('-r, --ratios <ratios>', 'Comma-separated frame ratios (e.g. 0.25,0.5,0.75)', '0.25,0.5,0.75')
+    .action(async (file, options) => {
+        const absoluteFilePath = path.resolve(file);
+        if (!fs.existsSync(absoluteFilePath)) {
+            console.error(`❌ Error: File not found: ${file}`);
+            process.exit(1);
+        }
+
+        console.log(`🔍 Auditing scene: ${file}...`);
+
+        try {
+            let sceneModule: any;
+            if (typeof Bun !== 'undefined') {
+                sceneModule = await import(absoluteFilePath);
+            } else {
+                require('ts-node').register({ transpileOnly: true });
+                sceneModule = require(absoluteFilePath);
+            }
+
+            const scene = sceneModule.default || sceneModule;
+            if (!scene || !scene.config || !scene.clips) {
+                console.error(`❌ Error: Invalid scene file format.`);
+                process.exit(1);
+            }
+
+            const ratios = options.ratios.split(',').map((r: string) => parseFloat(r.trim()));
+            const factory = new MotionFactory();
+
+            const report = await factory.snapshotKeyframes(
+                scene.config,
+                scene.clips,
+                file,
+                ratios,
+                options.outDir,
+                scene.blueprints
+            );
+
+            console.log(`\n✨ Audit complete! Results saved to: ${path.resolve(options.outDir)}`);
+            console.log(`📸 Snapshots generated: ${report.snapshots.length}`);
+            report.snapshots.forEach(s => {
+                console.log(`  - [${(s.ratio * 100).toFixed(0)}%] Frame ${s.tick} (${s.timeSeconds}s) -> ${s.imagePath}`);
+            });
+            console.log(`\n📄 Report JSON: ${path.join(path.resolve(options.outDir), 'audit-report.json')}`);
+        } catch (err) {
+            console.error('❌ Audit failed:');
+            console.error(err);
+            process.exit(1);
+        }
+    });
+
+program
+    .command('schemas')
+    .description('Export JSON schemas of all registered blueprints for AI Agent tool calling')
+    .argument('[file]', 'Optional scene file to include scene-specific blueprints')
+    .action(async (file) => {
+        const { BlueprintRegistry } = require('../core/Blueprint');
+        const { ProBlueprints } = require('../blueprints/ProBlueprints');
+
+        const registry = new BlueprintRegistry();
+        Object.entries(ProBlueprints).forEach(([id, bp]) => registry.register(id, bp as any));
+
+        if (file) {
+            const absoluteFilePath = path.resolve(file);
+            let sceneModule: any;
+            if (typeof Bun !== 'undefined') {
+                sceneModule = await import(absoluteFilePath);
+            } else {
+                require('ts-node').register({ transpileOnly: true });
+                sceneModule = require(absoluteFilePath);
+            }
+            const scene = sceneModule.default || sceneModule;
+            if (scene?.blueprints) {
+                Object.entries(scene.blueprints).forEach(([id, bp]) => registry.register(id, bp as any));
+            }
+        }
+
+        console.log(JSON.stringify(registry.exportSchemas(), null, 2));
     });
 
 program.parse();

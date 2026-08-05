@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ClawMotion - Programmatic Motion Engine for AI Agents</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            brand: {
+              dark: '#0a0a0f',
+              panel: '#0f0f1a',
+              border: '#1e1e2f',
+              red: '#ef4444',
+              pink: '#ec4899',
+              cyan: '#22d3ee',
+              purple: '#7e22ce'
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    body {
+      background-color: #0a0a0f;
+      color: #e2e8f0;
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: #0a0a0f;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #27273a;
+      border-radius: 3px;
+    }
+    .hero-glow {
+      background: radial-gradient(circle at 50% -20%, rgba(239, 68, 68, 0.18), rgba(126, 34, 206, 0.12), transparent 70%);
+    }
+    .grid-bg {
+      background-image: radial-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+      background-size: 24px 24px;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col font-sans selection:bg-red-600 selection:text-white">
+
+  <!-- ================= TOP HEADER ================= -->
+  <header class="h-16 bg-[#0f0f1a]/80 backdrop-blur-md border-b border-red-900/30 px-6 flex items-center justify-between sticky top-0 z-50">
+    <div class="flex items-center gap-3">
+      <div class="flex items-center gap-2.5">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-white">
+          <path d="M14 8c-1.1-1.1-1.4-2.6-1-4-2 .5-4 2-5 4-3 5-2 11 2 12" />
+          <path d="M20 10c-1-2-3-3-5-3" />
+          <path d="M6 10c-1.5 2-2 5-1 8s4 4 8 2" />
+          <circle cx="12" cy="12" r="2" class="fill-red-500 stroke-none animate-ping" />
+          <circle cx="12" cy="12" r="2" class="fill-red-500 stroke-none" />
+        </svg>
+        <span class="font-black tracking-tighter text-xl text-white">clawmotion</span>
+      </div>
+    </div>
+
+    <nav class="hidden md:flex items-center gap-6 text-xs font-medium text-slate-400">
+      <a href="#features" class="hover:text-white transition">Features</a>
+      <a href="#demo" class="hover:text-white transition">Live Canvas</a>
+      <a href="#code" class="hover:text-white transition">Blueprint API</a>
+    </nav>
+
+    <div class="flex items-center gap-3">
+      <a href="https://github.com/johnesleyer/clawmotion" target="_blank" class="px-4 py-2 text-xs font-semibold rounded-lg bg-slate-900 border border-slate-700/80 hover:bg-slate-800 text-slate-200 transition flex items-center gap-2">
+        <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+        GitHub
+      </a>
+      <a href="#demo" class="px-4 py-2 text-xs font-semibold rounded-lg bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-900/30 transition">
+        Get Started
+      </a>
+    </div>
+  </header>
+
+  <!-- ================= HERO SECTION ================= -->
+  <section class="hero-glow grid-bg relative pt-20 pb-16 px-6 flex flex-col items-center text-center">
+    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-red-950/60 border border-red-500/30 text-red-400 text-xs font-semibold mb-6">
+      <span class="w-2 h-2 rounded-full bg-red-500 animate-ping"></span>
+      The Agent-First Motion Graphics Engine
+    </div>
+
+    <h1 class="text-4xl sm:text-6xl font-black tracking-tight text-white max-w-4xl leading-tight mb-6">
+      Programmatic Motion Engine for <span class="bg-gradient-to-r from-red-500 via-pink-500 to-cyan-400 bg-clip-text text-transparent">AI Agents</span>
+    </h1>
+
+    <p class="text-slate-400 text-base sm:text-lg max-w-2xl leading-relaxed mb-8">
+      Isomorphic, deterministic, zero-Puppeteer video generation engine. Render frame-exact motion graphics in Node.js, Bun, or directly inside the browser using WebCodecs.
+    </p>
+
+    <div class="w-full max-w-xl bg-[#0f0f1a] border border-slate-800 rounded-xl p-3 flex items-center justify-between font-mono text-xs shadow-2xl mb-12">
+      <span class="text-slate-400">$ <span class="text-cyan-400">bun add</span> <span class="text-white">@johnesleyer/clawmotion</span></span>
+      <button onclick="navigator.clipboard.writeText('bun add @johnesleyer/clawmotion')" class="px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-sans transition">
+        Copy
+      </button>
+    </div>
+
+    <!-- Live Canvas Stage -->
+    <div id="demo" class="w-full max-w-4xl bg-[#0f0f1a] border border-slate-800/80 rounded-2xl p-4 shadow-2xl relative overflow-hidden">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800 text-xs font-mono text-slate-400">
+        <span class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-red-500"></span> Live Interactive Canvas Preview</span>
+        <span id="timeDisplay" class="text-cyan-400 font-bold">03.20s / 12.00s</span>
+      </div>
+
+      <div class="relative w-full aspect-video bg-black rounded-lg overflow-hidden my-3">
+        <canvas id="heroCanvas" width="1280" height="720" class="w-full h-full object-contain"></canvas>
+        <button id="playOverlay" onclick="togglePlay()" class="absolute inset-0 flex items-center justify-center bg-black/40 hover:bg-black/20 transition group">
+          <div class="w-16 h-16 rounded-full bg-red-600/90 group-hover:scale-110 flex items-center justify-center shadow-2xl transition">
+            <svg class="w-8 h-8 text-white ml-1" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+          </div>
+        </button>
+      </div>
+
+      <div class="flex items-center gap-4 text-xs">
+        <button id="playBtn" onclick="togglePlay()" class="px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-white font-mono">
+          PAUSE
+        </button>
+        <input type="range" id="scrubber" min="0" max="12" step="0.05" value="3.2" oninput="scrubTime(this.value)" class="flex-1 accent-red-500 cursor-pointer" />
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= FEATURES GRID ================= -->
+  <section id="features" class="py-20 px-6 max-w-6xl mx-auto">
+    <div class="text-center mb-16">
+      <h2 class="text-3xl font-black text-white tracking-tight mb-4">Built for AI Agents & High-Performance Backends</h2>
+      <p class="text-slate-400 text-sm max-w-xl mx-auto">Designed from the ground up for zero-friction LLM code generation and headless server efficiency.</p>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+      
+      <div class="p-6 rounded-2xl bg-[#0f0f1a] border border-slate-800/80 hover:border-red-500/40 transition">
+        <div class="w-10 h-10 rounded-xl bg-red-950/60 border border-red-500/30 text-red-400 flex items-center justify-center mb-4 font-mono text-lg">01</div>
+        <h3 class="text-base font-bold text-white mb-2">Zero-Puppeteer Pipeline</h3>
+        <p class="text-slate-400 text-xs leading-relaxed">
+          Node.js & Bun server rendering uses <code>skia-canvas</code> C++ bindings directly to FFmpeg. No heavy Chrome binaries or memory spikes.
+        </p>
+      </div>
+
+      <div class="p-6 rounded-2xl bg-[#0f0f1a] border border-slate-800/80 hover:border-cyan-500/40 transition">
+        <div class="w-10 h-10 rounded-xl bg-cyan-950/60 border border-cyan-500/30 text-cyan-400 flex items-center justify-center mb-4 font-mono text-lg">02</div>
+        <h3 class="text-base font-bold text-white mb-2">Agent-Native Schemas</h3>
+        <p class="text-slate-400 text-xs leading-relaxed">
+          Define blueprints using Zod schemas with <code>defineBlueprint</code>. Auto-export tool definitions for AI Function Calling with 100% type safety.
+        </p>
+      </div>
+
+      <div class="p-6 rounded-2xl bg-[#0f0f1a] border border-slate-800/80 hover:border-pink-500/40 transition">
+        <div class="w-10 h-10 rounded-xl bg-pink-950/60 border border-pink-500/30 text-pink-400 flex items-center justify-center mb-4 font-mono text-lg">03</div>
+        <h3 class="text-base font-bold text-white mb-2">Analytical Spring Physics</h3>
+        <p class="text-slate-400 text-xs leading-relaxed">
+          Built-in analytical spring solver (<code>utils.spring</code>) computes exact closed-form spring motion at any frame without numerical history.
+        </p>
+      </div>
+
+      <div class="p-6 rounded-2xl bg-[#0f0f1a] border border-slate-800/80 hover:border-amber-500/40 transition">
+        <div class="w-10 h-10 rounded-xl bg-amber-950/60 border border-amber-500/30 text-amber-400 flex items-center justify-center mb-4 font-mono text-lg">04</div>
+        <h3 class="text-base font-bold text-white mb-2">Agentic Vision Feedback</h3>
+        <p class="text-slate-400 text-xs leading-relaxed">
+          Run <code>clawmotion audit</code> to extract keyframe PNG snapshots and JSON reports for Vision models (GPT-4o, Gemini) to self-correct layouts.
+        </p>
+      </div>
+
+      <div class="p-6 rounded-2xl bg-[#0f0f1a] border border-slate-800/80 hover:border-purple-500/40 transition">
+        <div class="w-10 h-10 rounded-xl bg-purple-950/60 border border-purple-500/30 text-purple-400 flex items-center justify-center mb-4 font-mono text-lg">05</div>
+        <h3 class="text-base font-bold text-white mb-2">Mathematical Parity</h3>
+        <p class="text-slate-400 text-xs leading-relaxed">
+          Seeded pseudo-random number generator (<code>ClawMath</code>) guarantees frame-for-frame identity across browser previews and headless servers.
+        </p>
+      </div>
+
+      <div class="p-6 rounded-2xl bg-[#0f0f1a] border border-slate-800/80 hover:border-emerald-500/40 transition">
+        <div class="w-10 h-10 rounded-xl bg-emerald-950/60 border border-emerald-500/30 text-emerald-400 flex items-center justify-center mb-4 font-mono text-lg">06</div>
+        <h3 class="text-base font-bold text-white mb-2">Pre-Baked Audio FFT</h3>
+        <p class="text-slate-400 text-xs leading-relaxed">
+          Offline FFT audio analyzer bakes frequency bins per frame before rendering, avoiding live audio clock drift during playback.
+        </p>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ================= CODE SHOWCASE ================= -->
+  <section id="code" class="py-16 px-6 bg-[#07070c] border-y border-slate-800/80">
+    <div class="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+      <div>
+        <div class="text-xs font-semibold text-red-400 uppercase tracking-widest mb-2">Pure TypeScript API</div>
+        <h2 class="text-2xl sm:text-3xl font-black text-white tracking-tight mb-4">Define Motion with Type-Safe Blueprints</h2>
+        <p class="text-slate-400 text-xs sm:text-sm leading-relaxed mb-6">
+          Blueprints are pure functions. Pass parameter schemas with Zod, compute spring physics, and render using the standard 2D Canvas context.
+        </p>
+        <div class="space-y-3 font-mono text-xs text-slate-300">
+          <div class="flex items-center gap-2"><span class="text-emerald-400">+</span> Isomorphic Execution (Node, Bun, Browser)</div>
+          <div class="flex items-center gap-2"><span class="text-emerald-400">+</span> Auto-Validated Props with Defaults</div>
+          <div class="flex items-center gap-2"><span class="text-emerald-400">+</span> Instant Function Calling Export for AI</div>
+        </div>
+      </div>
+
+      <div class="bg-[#0f0f1a] border border-slate-800 rounded-2xl p-4 font-mono text-xs overflow-x-auto shadow-2xl">
+        <div class="text-slate-500 text-[10px] uppercase mb-3 flex items-center justify-between border-b border-slate-800 pb-2">
+          <span>blueprints/SpringBox.ts</span>
+          <span class="text-cyan-400">TypeScript</span>
+        </div>
+        <pre class="text-slate-300 leading-relaxed"><code><span class="text-purple-400">import</span> { defineBlueprint } <span class="text-purple-400">from</span> <span class="text-emerald-300">'@johnesleyer/clawmotion/core'</span>;
+<span class="text-purple-400">import</span> { z } <span class="text-purple-400">from</span> <span class="text-emerald-300">'zod'</span>;
+
+<span class="text-purple-400">export const</span> SpringBox = <span class="text-blue-400">defineBlueprint</span>({
+  id: <span class="text-emerald-300">'spring-box'</span>,
+  schema: z.<span class="text-blue-400">object</span>({
+    color: z.<span class="text-blue-400">string</span>().<span class="text-blue-400">default</span>(<span class="text-emerald-300">'#22d3ee'</span>),
+    stiffness: z.<span class="text-blue-400">number</span>().<span class="text-blue-400">default</span>(<span class="text-amber-300">200</span>)
+  }),
+  run: (<span class="text-amber-300">ctx</span>) =&gt; {
+    <span class="text-purple-400">const</span> { ctx: c, width, height, time, utils, props } = ctx;
+
+    <span class="text-slate-500">// Analytical Spring Physics</span>
+    <span class="text-purple-400">const</span> scale = utils.<span class="text-blue-400">spring</span>({
+      from: <span class="text-amber-300">0</span>, to: <span class="text-amber-300">1.5</span>,
+      time: time,
+      stiffness: props.stiffness
+    });
+
+    c.<span class="text-blue-400">save</span>();
+    c.<span class="text-blue-400">translate</span>(width / <span class="text-amber-300">2</span>, height / <span class="text-amber-300">2</span>);
+    c.<span class="text-blue-400">scale</span>(scale, scale);
+    c.fillStyle = props.color;
+    c.<span class="text-blue-400">fillRect</span>(-<span class="text-amber-300">50</span>, -<span class="text-amber-300">50</span>, <span class="text-amber-300">100</span>, <span class="text-amber-300">100</span>);
+    c.<span class="text-blue-400">restore</span>();
+  }
+});</code></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= FOOTER ================= -->
+  <footer class="mt-auto border-t border-slate-800/80 bg-[#0f0f1a] py-8 px-6 text-xs text-slate-500 flex flex-col sm:flex-row items-center justify-between max-w-6xl mx-auto w-full gap-4">
+    <div class="flex items-center gap-2">
+      <span class="font-black text-slate-300">clawmotion</span> - Programmatic Motion Engine
+    </div>
+    <div>
+      Created by <a href="https://github.com/johnesleyer" target="_blank" class="text-slate-300 hover:text-white underline">John Esleyer</a>
+    </div>
+  </footer>
+
+  <!-- ================= CANVAS ANIMATION SCRIPT ================= -->
+  <script>
+    let isPlaying = true;
+    let currentTime = 3.2;
+    const duration = 12.0;
+    let animId = null;
+
+    const canvas = document.getElementById('heroCanvas');
+    const ctx = canvas.getContext('2d');
+
+    function render(t) {
+      const w = canvas.width;
+      const h = canvas.height;
+
+      ctx.fillStyle = '#030308';
+      ctx.fillRect(0, 0, w, h);
+
+      const pulse = 0.5 + 0.5 * Math.sin(t * 3);
+      const grad = ctx.createRadialGradient(w/2, h/2, 20, w/2, h/2, Math.max(w, h) * (0.4 + pulse * 0.2));
+      grad.addColorStop(0, '#1e1b4b');
+      grad.addColorStop(0.5, '#7e22ce');
+      grad.addColorStop(1, '#020617');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
+
+      ctx.strokeStyle = '#22d3ee';
+      ctx.lineWidth = 3;
+      ctx.globalAlpha = 0.4;
+      ctx.beginPath();
+      for (let x = 0; x < w; x += 20) {
+        const y = h/2 + Math.sin(x * 0.01 + t * 5) * 40 + Math.cos(t * 3) * 20;
+        if (x === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+      ctx.globalAlpha = 1.0;
+
+      const cx = w/2 + Math.sin(t * 4) * 40;
+      const cy = h/2 + Math.cos(t * 6) * 15;
+      const beat = 1 + Math.sin(t * 10) * 0.15;
+
+      ctx.save();
+      ctx.translate(cx, cy);
+      
+      ctx.fillStyle = '#f8fafc';
+      ctx.beginPath();
+      ctx.arc(0, -90 * beat, 35, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#22d3ee';
+      ctx.fillRect(-25 * beat, -40, 50 * beat, 100);
+
+      ctx.fillStyle = '#ec4899';
+      ctx.fillRect(-100, -30, 75, 15);
+      ctx.fillRect(25, -30, 75, 15);
+
+      ctx.fillStyle = '#fde047';
+      ctx.fillRect(-20, 60, 18, 70);
+      ctx.fillRect(5, 60, 18, 70);
+
+      ctx.restore();
+
+      ctx.textAlign = 'center';
+      ctx.fillStyle = 'white';
+      ctx.font = 'bold 56px Inter';
+      ctx.shadowColor = '#ec4899';
+      ctx.shadowBlur = 20;
+      ctx.fillText('ClawMotion', w/2, h * 0.2 + Math.sin(t * 3) * 6);
+      ctx.shadowBlur = 0;
+    }
+
+    function togglePlay() {
+      isPlaying = !isPlaying;
+      document.getElementById('playBtn').innerText = isPlaying ? 'PAUSE' : 'PLAY';
+      document.getElementById('playOverlay').style.display = isPlaying ? 'none' : 'flex';
+
+      if (isPlaying) {
+        let lastTime = performance.now();
+        function loop(now) {
+          if (!isPlaying) return;
+          const dt = (now - lastTime) / 1000;
+          lastTime = now;
+          currentTime += dt;
+          if (currentTime >= duration) currentTime = 0;
+          
+          document.getElementById('scrubber').value = currentTime;
+          document.getElementById('timeDisplay').innerText = `${currentTime.toFixed(2)}s / ${duration.toFixed(2)}s`;
+          render(currentTime);
+          animId = requestAnimationFrame(loop);
+        }
+        animId = requestAnimationFrame(loop);
+      } else {
+        if (animId) cancelAnimationFrame(animId);
+      }
+    }
+
+    function scrubTime(val) {
+      currentTime = parseFloat(val);
+      document.getElementById('timeDisplay').innerText = `${currentTime.toFixed(2)}s / ${duration.toFixed(2)}s`;
+      render(currentTime);
+    }
+
+    togglePlay();
+  </script>
+</body>
+</html>

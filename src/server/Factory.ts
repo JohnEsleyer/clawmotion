@@ -19,6 +19,23 @@ export interface RenderOptions {
     clientEntry?: string;
 }
 
+export interface AuditSnapshot {
+    tick: number;
+    timeSeconds: number;
+    ratio: number;
+    imagePath: string;
+    activeClips: Array<{ id: string; blueprintId: string; layer: number }>;
+}
+
+export interface AuditReport {
+    sceneFile: string;
+    config: ClawConfig;
+    totalDurationSeconds: number;
+    totalFrames: number;
+    blueprintSchemas: Record<string, any>;
+    snapshots: AuditSnapshot[];
+}
+
 let activeSSEClients: Response[] = [];
 
 export const setupSSE = (app: express.Application) => {
@@ -58,6 +75,86 @@ export class MotionFactory {
             engine.registry.register(id, blueprint);
         });
         console.error(`[Factory] Registered ${Object.keys(ProBlueprints).length} blueprints`);
+    }
+
+    /**
+     * Generate keyframe PNG snapshots and a machine-readable audit report for AI Agents / Vision Models.
+     */
+    public async snapshotKeyframes(
+        config: ClawConfig,
+        clips: Clip[],
+        sceneFile: string,
+        ratios: number[] = [0.25, 0.5, 0.75],
+        outDir: string = '.claw-audit',
+        customBlueprints?: Record<string, any>
+    ): Promise<AuditReport> {
+        const engine = new ClawEngine(config);
+        await engine.init();
+        this.registerBlueprints(engine);
+
+        if (customBlueprints) {
+            Object.entries(customBlueprints).forEach(([id, codeOrBlueprint]) => {
+                if (typeof codeOrBlueprint === 'string') {
+                    try {
+                        const fn = eval(`(${codeOrBlueprint})`);
+                        engine.registry.register(id, fn);
+                    } catch (e) {
+                        console.error(`Failed to register blueprint ${id}:`, e);
+                    }
+                } else {
+                    engine.registry.register(id, codeOrBlueprint);
+                }
+            });
+        }
+
+        clips.forEach(c => engine.addClip(c));
+
+        const absoluteOutDir = path.resolve(outDir);
+        if (!fs.existsSync(absoluteOutDir)) {
+            fs.mkdirSync(absoluteOutDir, { recursive: true });
+        }
+
+        const totalFrames = Math.ceil(config.duration * config.fps);
+        const snapshots: AuditSnapshot[] = [];
+
+        for (const ratio of ratios) {
+            const timeSeconds = config.duration * ratio;
+            const tick = Math.min(totalFrames - 1, Math.floor(timeSeconds * config.fps));
+
+            engine.renderToInternalCanvas(tick);
+            const canvas = (engine.canvas as any).rawCanvas;
+            const pngBuffer = await canvas.toBuffer('png');
+
+            const fileName = `snapshot_${(ratio * 100).toFixed(0)}pct_tick_${tick}.png`;
+            const imagePath = path.join(absoluteOutDir, fileName);
+            fs.writeFileSync(imagePath, pngBuffer);
+
+            const activeClips = clips
+                .filter(c => tick >= c.startTick && tick < (c.startTick + c.durationTicks))
+                .map(c => ({ id: c.id, blueprintId: c.blueprintId, layer: c.layer || 0 }));
+
+            snapshots.push({
+                tick,
+                timeSeconds: parseFloat(timeSeconds.toFixed(2)),
+                ratio,
+                imagePath,
+                activeClips
+            });
+        }
+
+        const report: AuditReport = {
+            sceneFile,
+            config,
+            totalDurationSeconds: config.duration,
+            totalFrames,
+            blueprintSchemas: engine.registry.exportSchemas(),
+            snapshots
+        };
+
+        const reportPath = path.join(absoluteOutDir, 'audit-report.json');
+        fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
+
+        return report;
     }
 
     public async renderNode(config: ClawConfig, clips: Clip[], outputPath: string, onProgress?: (frame: number, total: number) => void, customBlueprints?: Record<string, string>) {
@@ -371,17 +468,16 @@ export class MotionFactory {
         console.log('[Factory] Starting Express server...');
         const app = express();
         const distPath = path.join(__dirname, '../../dist');
-        const studioPath = path.join(__dirname, '../../studio/dist');
+        const landingPath = path.join(process.cwd(), 'index.html');
         
         app.use('/preview-assets', express.static(process.cwd()));
         
-        app.use(express.static(studioPath));
-        app.get('/studio', (req, res) => {
-            res.sendFile(path.join(studioPath, 'index.html'));
-        });
-
         app.get('/', (req, res) => {
-            res.sendFile(path.join(studioPath, 'index.html'));
+            if (fs.existsSync(landingPath)) {
+                res.sendFile(landingPath);
+            } else {
+                res.send('<html><body><h1>ClawMotion Engine Running</h1></body></html>');
+            }
         });
 
         setupSSE(app);

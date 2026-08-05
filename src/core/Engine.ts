@@ -113,8 +113,8 @@ export class ClawEngine {
                 ctx.clearRect(0, 0, this.config.width, this.config.height);
             }
 
-            const blueprint = this.registry.get(clip.blueprintId);
-            if (!blueprint) return null;
+            const entry = this.registry.get(clip.blueprintId);
+            if (!entry) return null;
 
             const localTick = tick - clip.startTick;
             const localTime = localTick / clip.durationTicks;
@@ -149,11 +149,19 @@ export class ClawEngine {
             }
 
             // Merge static props with animated properties
-            const resolvedProps = { ...(clip.props || {}) };
+            let resolvedProps = { ...(clip.props || {}) };
             if (clip.animations) {
                 Object.entries(clip.animations).forEach(([prop, keyframes]) => {
                     resolvedProps[prop] = ClawAnimator.resolve(keyframes, localTick);
                 });
+            }
+
+            // Auto-validate and apply defaults from Zod schema if available
+            if (entry.schema) {
+                const parsed = entry.schema.safeParse(resolvedProps);
+                if (parsed.success) {
+                    resolvedProps = parsed.data;
+                }
             }
 
             const context: BlueprintContext = {
@@ -169,7 +177,7 @@ export class ClawEngine {
                 getAsset: (id: string) => this.assets.get(id)
             };
 
-            blueprint(context);
+            entry.run(context);
             ctx.restore();
 
             return {
@@ -229,8 +237,8 @@ export class ClawEngine {
             .sort((a, b) => (a.layer || 0) - (b.layer || 0));
 
         for (const clip of activeClips) {
-            const blueprint = this.registry.get(clip.blueprintId);
-            if (!blueprint) continue;
+            const entry = this.registry.get(clip.blueprintId);
+            if (!entry) continue;
 
             const localTick = tick - clip.startTick;
             const localTime = localTick / clip.durationTicks;
@@ -278,11 +286,19 @@ export class ClawEngine {
             }
 
             // Merge static props with animated properties
-            const resolvedProps = { ...(clip.props || {}) };
+            let resolvedProps = { ...(clip.props || {}) };
             if (clip.animations) {
                 Object.entries(clip.animations).forEach(([prop, keyframes]) => {
                     resolvedProps[prop] = ClawAnimator.resolve(keyframes, localTick);
                 });
+            }
+
+            // Auto-validate and apply defaults from Zod schema if available
+            if (entry.schema) {
+                const parsed = entry.schema.safeParse(resolvedProps);
+                if (parsed.success) {
+                    resolvedProps = parsed.data;
+                }
             }
 
             const context: BlueprintContext = {
@@ -298,7 +314,7 @@ export class ClawEngine {
                 getAsset: (id: string) => this.assets.get(id)
             };
 
-            blueprint(context);
+            entry.run(context);
             ctx.restore();
         }
 
